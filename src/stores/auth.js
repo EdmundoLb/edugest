@@ -1,0 +1,147 @@
+import { supabase } from '@/lib/supabase'
+import { reactive } from 'vue'
+
+const state = reactive({
+  user: null,
+  session: null,
+  loading: true,
+  perfil: null,
+  datosUsuario: null,
+})
+
+let authStateListenerUnsubscribe = null
+
+export function useAuth() {
+  async function initSession() {
+    if (authStateListenerUnsubscribe) {
+      authStateListenerUnsubscribe()
+    }
+
+    state.loading = true
+    const { data: { session } } = await supabase.auth.getSession()
+    state.session = session
+    state.user = session?.user ?? null
+
+    if (session?.user) {
+      await cargarPerfil()
+    } else {
+      state.perfil = null
+      state.datosUsuario = null
+    }
+    state.loading = false
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      state.session = session
+      state.user = session?.user ?? null
+
+      if (session?.user) {
+        await cargarPerfil()
+      } else {
+        state.perfil = null
+        state.datosUsuario = null
+      }
+    })
+
+    authStateListenerUnsubscribe = subscription.unsubscribe.bind(subscription)
+  }
+
+  async function cargarPerfil() {
+    if (!state.user) return
+
+    const { data: perfil } = await supabase
+      .from('perfiles')
+      .select('*')
+      .eq('user_id', state.user.id)
+      .single()
+
+    state.perfil = perfil
+
+    if (perfil) {
+      if (perfil.rol === 'estudiante') {
+        const { data: alumno } = await supabase
+          .from('alumnos')
+          .select('*')
+          .eq('perfil_id', perfil.id)
+          .single()
+        state.datosUsuario = alumno
+      } else if (perfil.rol === 'docente') {
+        const { data: profesor } = await supabase
+          .from('profesores')
+          .select('*')
+          .eq('perfil_id', perfil.id)
+          .single()
+        state.datosUsuario = profesor
+      }
+    }
+  }
+
+  async function login(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+    return data
+  }
+
+  function getUserRole() {
+    return state.perfil?.rol ?? null
+  }
+
+  function esEstudiante() {
+    return state.perfil?.rol === 'estudiante'
+  }
+
+  function esDocente() {
+    return state.perfil?.rol === 'docente'
+  }
+
+  function esAdmin() {
+    return state.perfil?.rol === 'admin'
+  }
+
+  async function logout() {
+    state.session = null
+    state.user = null
+    state.perfil = null
+    state.datosUsuario = null
+
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
+  async function signUp(email, password, nombre, rol = 'estudiante') {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nombre,
+          rol,
+        },
+      },
+    })
+    if (error) throw error
+    return data
+  }
+
+  function cleanup() {
+    if (authStateListenerUnsubscribe) {
+      authStateListenerUnsubscribe()
+      authStateListenerUnsubscribe = null
+    }
+  }
+
+  return {
+    state,
+    initSession,
+    login,
+    logout,
+    signUp,
+    getUserRole,
+    esEstudiante,
+    esDocente,
+    esAdmin,
+    cargarPerfil,
+    cleanup,
+  }
+}
