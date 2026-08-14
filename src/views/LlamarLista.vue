@@ -541,12 +541,18 @@ const totalJustificados = computed(() => {
   color: #fff;
   font-size: 0.9375rem;
   font-family: inherit;
+  color-scheme: dark;
 }
 
 .filtro-group select:focus,
 .filtro-group input:focus {
   outline: none;
   border-color: #004aad;
+}
+
+.filtro-group select option {
+  background: #022451;
+  color: #fff;
 }
 
 .curso-info {

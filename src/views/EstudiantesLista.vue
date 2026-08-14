@@ -290,11 +290,17 @@ const currentState = computed(() => {
   color: #fff;
   font-size: 0.9375rem;
   font-family: inherit;
+  color-scheme: dark;
 }
 
 .filtro-group select:focus {
   outline: none;
   border-color: #004aad;
+}
+
+.filtro-group select option {
+  background: #022451;
+  color: #fff;
 }
 
 .loading-state,
