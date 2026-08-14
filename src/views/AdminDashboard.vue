@@ -40,7 +40,7 @@ async function cargarDashboard() {
       .select(`
         id,
         fecha,
-        presente,
+        estado,
         alumno_id,
         horarios (cursos (nombre))
       `)
@@ -58,6 +58,8 @@ async function cargarDashboard() {
 function formatFecha(fecha) {
   return formatearFecha(fecha, { day: 'numeric', month: 'short' })
 }
+
+const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
 </script>
 
 <template>
@@ -138,8 +140,8 @@ function formatFecha(fecha) {
                   <span class="recent-curso">{{ reg.horarios?.cursos?.nombre || 'Sin curso' }}</span>
                   <span class="recent-fecha">{{ formatFecha(reg.fecha) }}</span>
                 </div>
-                <span :class="['recent-status', reg.presente ? 'presente' : 'ausente']">
-                  {{ reg.presente ? 'Presente' : 'Ausente' }}
+                <span :class="['recent-status', reg.estado]">
+                  {{ ESTADO_LABEL[reg.estado] }}
                 </span>
               </div>
             </div>
@@ -353,6 +355,11 @@ function formatFecha(fecha) {
 .recent-status.ausente {
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.15);
+}
+
+.recent-status.justificado {
+  color: #fcd34d;
+  background: rgba(234, 179, 8, 0.15);
 }
 
 @media (max-width: 768px) {

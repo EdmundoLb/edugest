@@ -28,7 +28,7 @@ async function cargarAsistencia() {
         .select(`
           id,
           fecha,
-          presente,
+          estado,
           observacion,
           horarios (
             id,
@@ -68,10 +68,12 @@ const nombreAlumno = computed(() => {
 
 const estadisticas = computed(() => {
   const total = asistencia.value.length
-  const presentes = asistencia.value.filter(a => a.presente).length
-  const ausentes = total - presentes
-  const porcentaje = total > 0 ? Math.round((presentes / total) * 100) : 0
-  return { total, presentes, ausentes, porcentaje }
+  const presentes = asistencia.value.filter(a => a.estado === 'presente').length
+  const ausentes = asistencia.value.filter(a => a.estado === 'ausente').length
+  const justificados = asistencia.value.filter(a => a.estado === 'justificado').length
+  const base = total - justificados
+  const porcentaje = base > 0 ? Math.round((presentes / base) * 100) : 0
+  return { total, presentes, ausentes, justificados, porcentaje }
 })
 
 const asistenciaPorCurso = computed(() => {
@@ -122,6 +124,10 @@ const asistenciaPorCurso = computed(() => {
             <span class="stat-value">{{ estadisticas.ausentes }}</span>
             <span class="stat-label">Ausente</span>
           </div>
+          <div class="stat-card justificado">
+            <span class="stat-value">{{ estadisticas.justificados }}</span>
+            <span class="stat-label">Justificado</span>
+          </div>
           <div class="stat-card porcentaje">
             <span class="stat-value">{{ estadisticas.porcentaje }}%</span>
             <span class="stat-label">Asistencia</span>
@@ -143,7 +149,7 @@ const asistenciaPorCurso = computed(() => {
             <div class="curso-header">
               <span class="curso-nombre">{{ data.curso.nombre }}</span>
               <span class="curso-stats">
-                {{ data.registros.filter(r => r.presente).length }}/{{ data.registros.length }} presentes
+                {{ data.registros.filter(r => r.estado === 'presente').length }}/{{ data.registros.length }} presentes
               </span>
             </div>
 
@@ -151,7 +157,7 @@ const asistenciaPorCurso = computed(() => {
               <div
                 v-for="registro in data.registros.slice(0, 10)"
                 :key="registro.id"
-                :class="['registro-item', registro.presente ? 'presente' : 'ausente']"
+                :class="['registro-item', registro.estado]"
               >
                 <div class="registro-fecha">
                   <span class="fecha-dia">{{ parseFechaLocal(registro.fecha).getDate() }}</span>
@@ -164,7 +170,8 @@ const asistenciaPorCurso = computed(() => {
                   </span>
                 </div>
                 <div class="registro-estado">
-                  <span v-if="registro.presente" class="estado-badge presente">Presente</span>
+                  <span v-if="registro.estado === 'presente'" class="estado-badge presente">Presente</span>
+                  <span v-else-if="registro.estado === 'justificado'" class="estado-badge justificado">Justificado</span>
                   <span v-else class="estado-badge ausente">Ausente</span>
                 </div>
                 <div v-if="registro.observacion" class="registro-observacion">
@@ -272,7 +279,7 @@ const asistenciaPorCurso = computed(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -304,6 +311,10 @@ const asistenciaPorCurso = computed(() => {
 
 .stat-card.ausente .stat-value {
   color: #fca5a5;
+}
+
+.stat-card.justificado .stat-value {
+  color: #fcd34d;
 }
 
 .stat-card.porcentaje .stat-value {
@@ -382,6 +393,10 @@ const asistenciaPorCurso = computed(() => {
   border-left-color: #ef4444;
 }
 
+.registro-item.justificado {
+  border-left-color: #eab308;
+}
+
 .registro-fecha {
   display: flex;
   flex-direction: column;
@@ -438,6 +453,11 @@ const asistenciaPorCurso = computed(() => {
 .estado-badge.ausente {
   background: rgba(239, 68, 68, 0.15);
   color: #fca5a5;
+}
+
+.estado-badge.justificado {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fcd34d;
 }
 
 .registro-observacion {

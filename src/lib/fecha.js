@@ -19,3 +19,9 @@ export function parseFechaLocal(fechaStr) {
 export function formatearFecha(fechaStr, opciones) {
   return parseFechaLocal(fechaStr).toLocaleDateString('es-ES', opciones)
 }
+
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+export function diaSemanaDeFecha(fechaStr) {
+  return DIAS_SEMANA[parseFechaLocal(fechaStr).getDay()]
+}

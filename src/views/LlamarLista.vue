@@ -3,7 +3,8 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import { hoyLocal } from '@/lib/fecha'
+import { hoyLocal, diaSemanaDeFecha, formatearFecha } from '@/lib/fecha'
+import { formatearDias, indiceDia } from '@/lib/dias'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,26 +19,51 @@ const asistenciaPreviaExiste = ref(false)
 const confirmandoSobrescritura = ref(false)
 
 const horarios = ref([])
-const horarioSeleccionado = ref(null)
+const cursoSeleccionado = ref(null)
 const alumnos = ref([])
 const fechaSeleccionada = ref(hoyLocal())
 const asistencia = ref({})
 const observaciones = ref({})
 
+const cursos = computed(() => {
+  const vistos = new Set()
+  return horarios.value
+    .map(h => h.cursos)
+    .filter(c => c && !vistos.has(c.id) && vistos.add(c.id))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+})
+
+const horarioDelDia = computed(() => {
+  if (!cursoSeleccionado.value) return null
+  const indice = indiceDia(diaSemanaDeFecha(fechaSeleccionada.value))
+  return horarios.value.find(
+    h => h.cursos?.id === cursoSeleccionado.value.id && indiceDia(h.dia_semana) === indice
+  ) || null
+})
+
+const diasDelCurso = computed(() => {
+  if (!cursoSeleccionado.value) return []
+  return formatearDias(
+    horarios.value.filter(h => h.cursos?.id === cursoSeleccionado.value.id).map(h => h.dia_semana)
+  )
+})
+
 onMounted(async () => {
   await cargarHorarios()
 
-  if (route.query.horario) {
+  let cursoId = route.query.curso
+  if (!cursoId && route.query.horario) {
     const h = horarios.value.find(horario => horario.id === route.query.horario)
-    if (h) {
-      horarioSeleccionado.value = h
-      await cargarAlumnos()
-    }
+    cursoId = h?.cursos?.id
+  }
+  if (cursoId) {
+    const c = cursos.value.find(curso => curso.id === cursoId)
+    if (c) cursoSeleccionado.value = c
   }
 })
 
-watch(horarioSeleccionado, async (nuevo) => {
-  if (nuevo) {
+watch([cursoSeleccionado, fechaSeleccionada], async ([curso]) => {
+  if (curso) {
     await cargarAlumnos()
   } else {
     alumnos.value = []
@@ -79,7 +105,7 @@ async function cargarHorarios() {
 }
 
 async function cargarAlumnos() {
-  if (!horarioSeleccionado.value) return
+  if (!cursoSeleccionado.value) return
 
   loadingAlumnos.value = true
   alumnos.value = []
@@ -87,13 +113,13 @@ async function cargarAlumnos() {
   observaciones.value = {}
 
   try {
-    const cursoId = horarioSeleccionado.value.cursos?.id
-    if (!cursoId) throw new Error('El horario seleccionado no tiene un curso asociado')
+    const horario = horarioDelDia.value
+    if (!horario) return
 
     const { data, error } = await supabase
       .from('inscripciones')
       .select('alumnos (id, nombre, apellido, perfil_id)')
-      .eq('curso_id', cursoId)
+      .eq('curso_id', cursoSeleccionado.value.id)
 
     if (error) throw error
 
@@ -103,19 +129,19 @@ async function cargarAlumnos() {
       const { data: asistenciaExistente } = await supabase
         .from('asistencia')
         .select('*')
-        .eq('horario_id', horarioSeleccionado.value.id)
+        .eq('horario_id', horario.id)
         .eq('fecha', fechaSeleccionada.value)
 
       asistenciaPreviaExiste.value = asistenciaExistente && asistenciaExistente.length > 0
 
       if (asistenciaExistente && asistenciaExistente.length > 0) {
         asistenciaExistente.forEach(a => {
-          asistencia.value[a.alumno_id] = a.presente
+          asistencia.value[a.alumno_id] = a.estado
           observaciones.value[a.alumno_id] = a.observacion || ''
         })
       } else {
         alumnos.value.forEach(a => {
-          asistencia.value[a.id] = true
+          asistencia.value[a.id] = 'presente'
           observaciones.value[a.id] = ''
         })
       }
@@ -130,7 +156,7 @@ async function cargarAlumnos() {
 }
 
 async function guardarAsistencia() {
-  if (!horarioSeleccionado.value || alumnos.value.length === 0) return
+  if (!cursoSeleccionado.value || !horarioDelDia.value || alumnos.value.length === 0) return
 
   if (asistenciaPreviaExiste.value && !confirmandoSobrescritura.value) {
     confirmandoSobrescritura.value = true
@@ -143,10 +169,10 @@ async function guardarAsistencia() {
 
   try {
     const asistenciaRecords = alumnos.value.map(alumno => ({
-      horario_id: horarioSeleccionado.value.id,
+      horario_id: horarioDelDia.value.id,
       alumno_id: alumno.id,
       fecha: fechaSeleccionada.value,
-      presente: asistencia.value[alumno.id] ?? true,
+      estado: asistencia.value[alumno.id] || 'presente',
       observacion: observaciones.value[alumno.id] || null
     }))
 
@@ -174,24 +200,32 @@ async function guardarAsistencia() {
   }
 }
 
-function marcarTodos(presente) {
+function marcarTodos(estado) {
   alumnos.value.forEach(a => {
-    asistencia.value[a.id] = presente
+    asistencia.value[a.id] = estado
   })
 }
 
 const todosPresentes = computed(() => {
   if (alumnos.value.length === 0) return false
-  return alumnos.value.every(a => asistencia.value[a.id] === true)
+  return alumnos.value.every(a => asistencia.value[a.id] === 'presente')
 })
 
 const todosAusentes = computed(() => {
   if (alumnos.value.length === 0) return false
-  return alumnos.value.every(a => asistencia.value[a.id] === false)
+  return alumnos.value.every(a => asistencia.value[a.id] === 'ausente')
 })
 
 const totalPresentes = computed(() => {
-  return alumnos.value.filter(a => asistencia.value[a.id] === true).length
+  return alumnos.value.filter(a => asistencia.value[a.id] === 'presente').length
+})
+
+const totalAusentes = computed(() => {
+  return alumnos.value.filter(a => asistencia.value[a.id] === 'ausente').length
+})
+
+const totalJustificados = computed(() => {
+  return alumnos.value.filter(a => asistencia.value[a.id] === 'justificado').length
 })
 </script>
 
@@ -220,15 +254,15 @@ const totalPresentes = computed(() => {
       <div v-else class="lista-content">
         <div class="filtros-section">
           <div class="filtro-group">
-            <label for="horario">Curso / Horario</label>
+            <label for="curso">Curso</label>
             <select
-              id="horario"
-              v-model="horarioSeleccionado"
+              id="curso"
+              v-model="cursoSeleccionado"
               :disabled="loadingAlumnos"
             >
               <option :value="null" disabled>Selecciona un curso</option>
-              <option v-for="h in horarios" :key="h.id" :value="h">
-                {{ h.cursos?.nombre }} - {{ h.dia_semana }} {{ h.hora_inicio }}
+              <option v-for="c in cursos" :key="c.id" :value="c">
+                {{ c.nombre }}
               </option>
             </select>
           </div>
@@ -240,10 +274,14 @@ const totalPresentes = computed(() => {
               type="date"
               v-model="fechaSeleccionada"
               :disabled="loadingAlumnos"
-              @change="cargarAlumnos"
             />
           </div>
         </div>
+
+        <p v-if="cursoSeleccionado" class="curso-info">
+          Este curso tiene clase:
+          <span v-for="chip in diasDelCurso" :key="chip" class="dia-chip">{{ chip }}</span>
+        </p>
 
         <div v-if="mensaje" :class="['mensaje', tipoMensaje]">
           {{ mensaje }}
@@ -261,27 +299,42 @@ const totalPresentes = computed(() => {
           </div>
         </div>
 
-        <div v-if="horarioSeleccionado && !loadingAlumnos" class="alumnos-section">
+        <div v-if="cursoSeleccionado && !horarioDelDia && !loadingAlumnos" class="sin-clase-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="sin-clase-icon">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+            <path d="M9 16l6-6M9 10l6 6" />
+          </svg>
+          <p>
+            {{ cursoSeleccionado.nombre }} no tiene clase el
+            {{ formatearFecha(fechaSeleccionada, { weekday: 'long', day: 'numeric', month: 'long' }) }}.
+          </p>
+          <span class="sin-clase-hint">Días de clase: {{ diasDelCurso.join(', ') }}</span>
+        </div>
+
+        <div v-if="cursoSeleccionado && horarioDelDia && !loadingAlumnos" class="alumnos-section">
           <div class="alumnos-header">
             <div class="alumnos-stats">
               <span>{{ alumnos.length }} alumnos</span>
               <span class="stat-divider">|</span>
               <span class="stat-presente">{{ totalPresentes }} presentes</span>
               <span class="stat-divider">|</span>
-              <span>{{ alumnos.length - totalPresentes }} ausentes</span>
+              <span class="stat-ausente">{{ totalAusentes }} ausentes</span>
+              <span class="stat-divider">|</span>
+              <span class="stat-justificado">{{ totalJustificados }} justificados</span>
             </div>
 
             <div class="acciones-rapidas" v-if="alumnos.length > 0">
               <button
                 class="btn-todos btn-presente"
-                @click="marcarTodos(true)"
+                @click="marcarTodos('presente')"
                 :disabled="todosPresentes"
               >
                 Todos presentes
               </button>
               <button
                 class="btn-todos btn-ausente"
-                @click="marcarTodos(false)"
+                @click="marcarTodos('ausente')"
                 :disabled="todosAusentes"
               >
                 Todos ausentes
@@ -305,24 +358,34 @@ const totalPresentes = computed(() => {
               </div>
 
               <div class="asistencia-opciones">
-                <label class="opcion presente" :class="{ active: asistencia[alumno.id] === true }">
+                <label class="opcion presente" :class="{ active: asistencia[alumno.id] === 'presente' }">
                   <input
                     type="radio"
                     :name="`asistencia-${alumno.id}`"
-                    :checked="asistencia[alumno.id] === true"
-                    @change="asistencia[alumno.id] = true"
+                    :checked="asistencia[alumno.id] === 'presente'"
+                    @change="asistencia[alumno.id] = 'presente'"
                   />
                   <span class="opcion-texto">Presente</span>
                 </label>
 
-                <label class="opcion ausente" :class="{ active: asistencia[alumno.id] === false }">
+                <label class="opcion ausente" :class="{ active: asistencia[alumno.id] === 'ausente' }">
                   <input
                     type="radio"
                     :name="`asistencia-${alumno.id}`"
-                    :checked="asistencia[alumno.id] === false"
-                    @change="asistencia[alumno.id] = false"
+                    :checked="asistencia[alumno.id] === 'ausente'"
+                    @change="asistencia[alumno.id] = 'ausente'"
                   />
                   <span class="opcion-texto">Ausente</span>
+                </label>
+
+                <label class="opcion justificado" :class="{ active: asistencia[alumno.id] === 'justificado' }">
+                  <input
+                    type="radio"
+                    :name="`asistencia-${alumno.id}`"
+                    :checked="asistencia[alumno.id] === 'justificado'"
+                    @change="asistencia[alumno.id] = 'justificado'"
+                  />
+                  <span class="opcion-texto">Justificado</span>
                 </label>
               </div>
 
@@ -486,6 +549,52 @@ const totalPresentes = computed(() => {
   border-color: #004aad;
 }
 
+.curso-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 1.5rem;
+}
+
+.dia-chip {
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sin-clase-box {
+  text-align: center;
+  padding: 3rem;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.sin-clase-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1rem;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.sin-clase-box p {
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 0.5rem;
+}
+
+.sin-clase-hint {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .mensaje {
   padding: 1rem;
   border-radius: 8px;
@@ -587,6 +696,14 @@ const totalPresentes = computed(() => {
   color: #6ee7b7;
 }
 
+.stat-ausente {
+  color: #fca5a5;
+}
+
+.stat-justificado {
+  color: #fcd34d;
+}
+
 .acciones-rapidas {
   display: flex;
   gap: 0.5rem;
@@ -640,14 +757,14 @@ const totalPresentes = computed(() => {
 .alumnos-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.375rem;
 }
 
 .alumno-card {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.625rem 0.875rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
@@ -661,8 +778,8 @@ const totalPresentes = computed(() => {
 }
 
 .alumno-avatar {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: linear-gradient(135deg, #004aad, #022451);
   display: flex;
@@ -709,6 +826,12 @@ const totalPresentes = computed(() => {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.4);
   color: #fca5a5;
+}
+
+.opcion.justificado.active {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #fcd34d;
 }
 
 .opcion:hover {

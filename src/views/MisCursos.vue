@@ -3,13 +3,14 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
+import { formatearDias } from '@/lib/dias'
+import Spinner from '@/components/Spinner.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 const { state } = useAuth()
 const loading = ref(true)
 const horarios = ref([])
-
-const diasOrden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 onMounted(async () => {
   await cargarHorarios()
@@ -63,26 +64,31 @@ async function cargarHorarios() {
   }
 }
 
-const horariosPorDia = computed(() => {
-  const agrupado = {}
-  diasOrden.forEach(dia => {
-    agrupado[dia] = horarios.value.filter(h => h.dia_semana === dia)
-  })
-  return agrupado
-})
+const diasActivos = computed(() => new Set(horarios.value.map(h => h.dia_semana)).size)
 
-const cursosUnicos = computed(() => {
-  const cursos = new Map()
+const cursosAgrupados = computed(() => {
+  const grupos = new Map()
   horarios.value.forEach(h => {
-    if (h.cursos) {
-      cursos.set(h.cursos.id, h.cursos)
+    if (!h.cursos) return
+    const key = `${h.cursos.id}|${h.hora_inicio}|${h.hora_fin}|${h.turno}`
+    if (!grupos.has(key)) {
+      grupos.set(key, {
+        curso: h.cursos,
+        horaInicio: h.hora_inicio,
+        horaFin: h.hora_fin,
+        turno: h.turno,
+        horarios: []
+      })
     }
+    grupos.get(key).horarios.push(h)
   })
-  return Array.from(cursos.values())
+  return Array.from(grupos.values()).sort((a, b) => a.curso.nombre.localeCompare(b.curso.nombre))
 })
 
-function irALlamarLista(horarioId) {
-  router.push({ path: '/LlamarLista', query: { horario: horarioId } })
+const cursosUnicos = computed(() => new Set(cursosAgrupados.value.map(g => g.curso.id)).size)
+
+function irALlamarLista(grupo) {
+  router.push({ path: '/LlamarLista', query: { curso: grupo.curso.id } })
 }
 </script>
 
@@ -104,24 +110,25 @@ function irALlamarLista(horarioId) {
 
     <main class="page-content">
       <div v-if="loading" class="loading-state">
-        <div class="spinner" />
+        <Spinner size="large" />
         <p>Cargando cursos...</p>
       </div>
 
-      <div v-else-if="horarios.length === 0" class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
-          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-        </svg>
-        <p>No tienes cursos asignados</p>
-      </div>
+      <EmptyState v-else-if="horarios.length === 0" title="No tienes cursos asignados">
+        <template #icon>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+          </svg>
+        </template>
+      </EmptyState>
 
       <div v-else class="cursos-content">
         <section class="cursos-resumen">
           <h2>Resumen</h2>
           <div class="resumen-stats">
             <div class="resumen-stat">
-              <span class="stat-value">{{ cursosUnicos.length }}</span>
+              <span class="stat-value">{{ cursosUnicos }}</span>
               <span class="stat-label">Cursos</span>
             </div>
             <div class="resumen-stat">
@@ -129,42 +136,41 @@ function irALlamarLista(horarioId) {
               <span class="stat-label">Horarios</span>
             </div>
             <div class="resumen-stat">
-              <span class="stat-value">{{ Object.values(horariosPorDia).filter(d => d.length > 0).length }}</span>
+              <span class="stat-value">{{ diasActivos }}</span>
               <span class="stat-label">Días activos</span>
             </div>
           </div>
         </section>
 
         <section class="cursos-lista">
-          <h2>Horarios por Día</h2>
+          <h2>Mis Cursos</h2>
 
-          <div v-for="dia in diasOrden" :key="dia" class="dia-section" v-show="horariosPorDia[dia].length > 0">
-            <h3 class="dia-titulo">
-              <span class="dia-num">{{ diasOrden.indexOf(dia) + 1 }}</span>
-              {{ dia }}
-            </h3>
-
-            <div class="horarios-grid">
-              <div v-for="horario in horariosPorDia[dia]" :key="horario.id" class="horario-card">
-                <div class="horario-curso">
-                  <span class="curso-nombre">{{ horario.cursos?.nombre || 'Curso' }}</span>
-                  <span class="horario-turno">{{ horario.turno }}</span>
-                </div>
-                <div class="horario-tiempo">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="time-icon">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <span>{{ horario.hora_inicio }} - {{ horario.hora_fin }}</span>
-                </div>
-                <button
-                  v-if="state.perfil?.rol === 'docente'"
-                  class="btn-llamar"
-                  @click="irALlamarLista(horario.id, horario.cursos?.nombre)"
-                >
-                  Llamar Lista
-                </button>
+          <div class="cursos-grid">
+            <div v-for="grupo in cursosAgrupados" :key="`${grupo.curso.id}-${grupo.horaInicio}`" class="curso-card">
+              <div class="horario-curso">
+                <span class="curso-nombre">{{ grupo.curso.nombre }}</span>
+                <span class="horario-turno">{{ grupo.turno }}</span>
               </div>
+              <p v-if="grupo.curso.descripcion" class="curso-descripcion">{{ grupo.curso.descripcion }}</p>
+              <div class="dias-chips">
+                <span v-for="chip in formatearDias(grupo.horarios.map(h => h.dia_semana))" :key="chip" class="dia-chip">
+                  {{ chip }}
+                </span>
+              </div>
+              <div class="horario-tiempo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="time-icon">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>{{ grupo.horaInicio }} - {{ grupo.horaFin }}</span>
+              </div>
+              <button
+                v-if="state.perfil?.rol === 'docente'"
+                class="btn-llamar"
+                @click="irALlamarLista(grupo)"
+              >
+                Llamar Lista
+              </button>
             </div>
           </div>
         </section>
@@ -243,32 +249,14 @@ function irALlamarLista(horarioId) {
   padding: 2rem;
 }
 
-.loading-state,
-.empty-state {
+.loading-state {
   text-align: center;
   padding: 4rem 2rem;
   color: rgba(255, 255, 255, 0.5);
 }
 
-.spinner {
-  width: 28px;
-  height: 28px;
+.loading-state :deep(.spinner) {
   margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 1rem;
-  color: rgba(255, 255, 255, 0.2);
 }
 
 .cursos-content h2 {
@@ -307,38 +295,13 @@ function irALlamarLista(horarioId) {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.dia-section {
-  margin-bottom: 2rem;
-}
-
-.dia-titulo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
-
-.dia-num {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: #004aad;
-  border-radius: 50%;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.horarios-grid {
+.cursos-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
 }
 
-.horario-card {
+.curso-card {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -346,6 +309,27 @@ function irALlamarLista(horarioId) {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+}
+
+.curso-descripcion {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: -0.5rem 0 0;
+}
+
+.dias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.dia-chip {
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .horario-curso {
@@ -416,7 +400,7 @@ function irALlamarLista(horarioId) {
     gap: 0.75rem;
   }
 
-  .horarios-grid {
+  .cursos-grid {
     grid-template-columns: 1fr;
   }
 }

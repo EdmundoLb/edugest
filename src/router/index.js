@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import PaginaInicio from '@/views/PaginaInicio.vue'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/stores/auth'
+
+const { state: authState } = useAuth()
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -77,11 +80,26 @@ const rutaHomePorRol = {
   admin: '/admin',
 }
 
+const SESSION_TIMEOUT_MS = 4000
+const TIMEOUT = Symbol('timeout')
+
+// Toda llamada de Supabase puede quedar colgada para siempre si el tab
+// estuvo mucho tiempo en background y el refresh automático de token quedó
+// trabado (ver main.js). Si tarda demasiado, no congelamos la navegación:
+// el guard es solo una conveniencia de UX, la seguridad real vive en RLS.
+function conTimeout(promise, ms = SESSION_TIMEOUT_MS) {
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(TIMEOUT), ms))
+  return Promise.race([promise, timeout])
+}
+
+async function resolverSesion() {
+  const resultado = await conTimeout(supabase.auth.getSession().then(({ data }) => data.session))
+  return resultado === TIMEOUT ? authState.session : resultado
+}
+
 router.beforeEach(async (to) => {
   if (to.meta.requiresAuth) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const session = await resolverSesion()
 
     if (!session) {
       return '/login'
@@ -90,11 +108,15 @@ router.beforeEach(async (to) => {
     if (to.meta.rol) {
       const rolesPermitidos = Array.isArray(to.meta.rol) ? to.meta.rol : [to.meta.rol]
 
-      const { data: perfil } = await supabase
-        .from('perfiles')
-        .select('rol')
-        .eq('user_id', session.user.id)
-        .single()
+      const resultado = await conTimeout(
+        supabase.from('perfiles').select('rol').eq('user_id', session.user.id).single()
+      )
+
+      // Si la consulta de perfil se cuelga, dejamos pasar en vez de bloquear
+      // la navegación para siempre: RLS igual protege los datos reales.
+      if (resultado === TIMEOUT) return
+
+      const perfil = resultado.data
 
       if (!perfil || !rolesPermitidos.includes(perfil.rol)) {
         return rutaHomePorRol[perfil?.rol] ?? '/login'

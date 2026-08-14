@@ -1,36 +1,90 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import Pagination from '@/components/Pagination.vue'
 
 const router = useRouter()
-const { state } = useAuth()
+const { state, esAdmin } = useAuth()
 const loading = ref(true)
+const loadingEstudiantes = ref(false)
+const cursos = ref([])
+const cursoSeleccionado = ref(null)
 const estudiantes = ref([])
 const currentPage = ref(1)
 const pageSize = 10
 
 onMounted(async () => {
-  await cargarEstudiantes()
+  await cargarCursos()
+  loading.value = false
 })
 
+watch(cursoSeleccionado, async (nuevo) => {
+  currentPage.value = 1
+  if (nuevo) {
+    await cargarEstudiantes()
+  } else {
+    estudiantes.value = []
+  }
+})
+
+async function cargarCursos() {
+  try {
+    if (esAdmin()) {
+      const { data, error } = await supabase
+        .from('cursos')
+        .select('id, nombre')
+        .order('nombre')
+
+      if (error) throw error
+      cursos.value = data || []
+    } else {
+      const { data: profesor } = await supabase
+        .from('profesores')
+        .select('id')
+        .eq('perfil_id', state.perfil?.id)
+        .single()
+
+      if (profesor) {
+        const { data, error } = await supabase
+          .from('horarios')
+          .select('cursos (id, nombre)')
+          .eq('profesor_id', profesor.id)
+
+        if (error) throw error
+
+        const vistos = new Set()
+        cursos.value = (data || [])
+          .map(h => h.cursos)
+          .filter(c => c && !vistos.has(c.id) && vistos.add(c.id))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre))
+      }
+    }
+  } catch (e) {
+    console.error(e)
+    cursos.value = []
+  }
+}
+
 async function cargarEstudiantes() {
-  loading.value = true
+  if (!cursoSeleccionado.value) return
+
+  loadingEstudiantes.value = true
   try {
     const { data, error } = await supabase
-      .from('alumnos')
-      .select('id, nombre, apellido, telefono, created_at')
-      .order('nombre')
+      .from('inscripciones')
+      .select('alumnos (id, nombre, apellido, telefono, created_at)')
+      .eq('curso_id', cursoSeleccionado.value.id)
 
     if (error) throw error
-    estudiantes.value = data || []
+    estudiantes.value = (data || []).map(i => i.alumnos).filter(Boolean)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
   } catch (e) {
     console.error(e)
     estudiantes.value = []
   } finally {
-    loading.value = false
+    loadingEstudiantes.value = false
   }
 }
 
@@ -51,6 +105,8 @@ function changePage(page) {
 
 const currentState = computed(() => {
   if (loading.value) return 'loading'
+  if (!cursoSeleccionado.value) return 'sin-curso'
+  if (loadingEstudiantes.value) return 'loading-estudiantes'
   if (estudiantes.value.length === 0) return 'empty'
   return 'list'
 })
@@ -61,7 +117,9 @@ const currentState = computed(() => {
     <header class="page-header">
       <div class="header-left">
         <h1>Gestión de Alumnos</h1>
-        <span class="students-count">{{ estudiantes.length }} alumnos registrados</span>
+        <span class="students-count">
+          {{ cursoSeleccionado ? `${estudiantes.length} alumnos en ${cursoSeleccionado.nombre}` : 'Elegí un curso' }}
+        </span>
       </div>
       <div class="header-right">
         <span class="user-email">{{ state.user?.email }}</span>
@@ -69,21 +127,41 @@ const currentState = computed(() => {
     </header>
 
 <main class="page-content">
+      <div class="filtros-section">
+        <div class="filtro-group">
+          <label for="curso">Curso</label>
+          <select id="curso" v-model="cursoSeleccionado" :disabled="loading">
+            <option :value="null" disabled>Selecciona un curso</option>
+            <option v-for="c in cursos" :key="c.id" :value="c">{{ c.nombre }}</option>
+          </select>
+        </div>
+      </div>
+
       <transition name="fade" mode="out-in">
         <div :key="currentState">
-          <div v-if="loading" class="loading-state">
+          <div v-if="loading || currentState === 'loading-estudiantes'" class="loading-state">
             <div class="spinner" />
             <p>Cargando alumnos...</p>
           </div>
 
-          <div v-else-if="estudiantes.length === 0" class="empty-state">
+          <div v-else-if="currentState === 'sin-curso'" class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
               <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
               <circle cx="9" cy="7" r="4" />
               <path d="M23 21v-2a4 4 0 00-3-3.87" />
               <path d="M16 3.13a4 4 0 010 7.75" />
             </svg>
-            <p>No hay alumnos registrados</p>
+            <p>Elegí un curso para ver sus alumnos</p>
+          </div>
+
+          <div v-else-if="currentState === 'empty'" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 00-3-3.87" />
+              <path d="M16 3.13a4 4 0 010 7.75" />
+            </svg>
+            <p>No hay alumnos inscriptos en este curso</p>
           </div>
 
           <div v-else class="students-grid">
@@ -182,6 +260,41 @@ const currentState = computed(() => {
 
 .page-content {
   padding: 2rem;
+}
+
+.filtros-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  max-width: 320px;
+}
+
+.filtro-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.filtro-group label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.filtro-group select {
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.filtro-group select:focus {
+  outline: none;
+  border-color: #004aad;
 }
 
 .loading-state,

@@ -55,7 +55,7 @@ async function cargarReportes() {
         .select(`
           id,
           fecha,
-          presente,
+          estado,
           horarios (id, cursos (id, nombre))
         `)
         .in('horario_id', horarioIds)
@@ -93,13 +93,16 @@ const reportesAgrupados = computed(() => {
         fecha,
         total: 0,
         presentes: 0,
-        ausentes: 0
+        ausentes: 0,
+        justificados: 0
       }
     }
 
     agrupado[cursoId].fechas[fecha].total++
-    if (r.presente) {
+    if (r.estado === 'presente') {
       agrupado[cursoId].fechas[fecha].presentes++
+    } else if (r.estado === 'justificado') {
+      agrupado[cursoId].fechas[fecha].justificados++
     } else {
       agrupado[cursoId].fechas[fecha].ausentes++
     }
@@ -110,14 +113,17 @@ const reportesAgrupados = computed(() => {
 
 const estadisticasGenerales = computed(() => {
   const total = reportes.value.length
-  const presentes = reportes.value.filter(r => r.presente).length
-  const ausentes = total - presentes
-  const porcentaje = total > 0 ? Math.round((presentes / total) * 100) : 0
-  return { total, presentes, ausentes, porcentaje }
+  const presentes = reportes.value.filter(r => r.estado === 'presente').length
+  const ausentes = reportes.value.filter(r => r.estado === 'ausente').length
+  const justificados = reportes.value.filter(r => r.estado === 'justificado').length
+  const base = total - justificados
+  const porcentaje = base > 0 ? Math.round((presentes / base) * 100) : 0
+  return { total, presentes, ausentes, justificados, porcentaje }
 })
 
 function getPorcentajeClass(fechaData) {
-  const pct = (fechaData.presentes / fechaData.total) * 100
+  const base = fechaData.total - fechaData.justificados
+  const pct = base > 0 ? (fechaData.presentes / base) * 100 : 0
   if (pct >= 90) return 'excelente'
   if (pct >= 70) return 'bueno'
   if (pct >= 50) return 'regular'
@@ -161,6 +167,10 @@ function getPorcentajeClass(fechaData) {
             <span class="stat-value">{{ estadisticasGenerales.ausentes }}</span>
             <span class="stat-label">Ausentes</span>
           </div>
+          <div class="stat-card justificado">
+            <span class="stat-value">{{ estadisticasGenerales.justificados }}</span>
+            <span class="stat-label">Justificados</span>
+          </div>
           <div class="stat-card porcentaje">
             <span class="stat-value">{{ estadisticasGenerales.porcentaje }}%</span>
             <span class="stat-label">Tasa asistencia</span>
@@ -192,6 +202,7 @@ function getPorcentajeClass(fechaData) {
                 <span class="col-fecha">Fecha</span>
                 <span class="col-presentes">Presentes</span>
                 <span class="col-ausentes">Ausentes</span>
+                <span class="col-justificados">Justificados</span>
                 <span class="col-porcentaje">%</span>
               </div>
 
@@ -205,8 +216,9 @@ function getPorcentajeClass(fechaData) {
                 </span>
                 <span class="col-presentes">{{ fechaData.presentes }}</span>
                 <span class="col-ausentes">{{ fechaData.ausentes }}</span>
+                <span class="col-justificados">{{ fechaData.justificados }}</span>
                 <span class="col-porcentaje" :class="getPorcentajeClass(fechaData)">
-                  {{ Math.round((fechaData.presentes / fechaData.total) * 100) }}%
+                  {{ Math.round((fechaData.presentes / (fechaData.total - fechaData.justificados || 1)) * 100) }}%
                 </span>
               </div>
             </div>
@@ -311,7 +323,7 @@ function getPorcentajeClass(fechaData) {
 
 .stats-summary {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -343,6 +355,10 @@ function getPorcentajeClass(fechaData) {
 
 .stat-card.ausente .stat-value {
   color: #fca5a5;
+}
+
+.stat-card.justificado .stat-value {
+  color: #fcd34d;
 }
 
 .stat-card.porcentaje .stat-value {
@@ -447,6 +463,10 @@ function getPorcentajeClass(fechaData) {
 
 .col-ausentes {
   color: #fca5a5;
+}
+
+.col-justificados {
+  color: #fcd34d;
 }
 
 .col-porcentaje {
