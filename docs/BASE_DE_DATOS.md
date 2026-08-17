@@ -24,6 +24,7 @@ alumnos
   nombre, apellido      varchar NOT NULL
   fecha_nacimiento      date
   telefono              varchar
+  telefono_padre        text     -- agregado en 0005; texto libre, sin validar formato/código de país
   direccion             text
   historial_academico   text
   created_at, updated_at timestamptz
@@ -69,7 +70,20 @@ asistencia
   observacion   text
   created_at    timestamptz
   UNIQUE (horario_id, alumno_id, fecha)   -- agregado en migración 0001; lo necesita el upsert de LlamarLista.vue
+
+informes_asistencia     -- agregada en migración 0005
+  id            uuid PK
+  horario_id    uuid FK -> horarios.id
+  fecha         date NOT NULL
+  profesor_id   uuid FK -> profesores.id
+  estado        varchar CHECK IN ('pendiente','revisado') default 'pendiente'
+  creado_at     timestamptz
+  revisado_at   timestamptz
+  revisado_por  uuid FK -> perfiles.id
+  UNIQUE (horario_id, fecha)
 ```
+
+`informes_asistencia` es el "remito" que un docente arma después de tomar asistencia (`LlamarLista.vue`, botón "Remitir informe a administración"): marca que la asistencia de un horario+fecha ya está lista para que el admin le avise a los padres. El admin la revisa en `InformesAsistencia.vue`, arma un link de `wa.me` por alumno con `src/lib/whatsapp.js` (usa `alumnos.telefono_padre`) y la marca como `revisado`. No hay envío automático de mensajes — el admin abre WhatsApp y lo manda a mano — y no hay tracking de qué alumnos puntuales ya se le avisaron dentro de un informe, el estado es a nivel informe completo.
 
 `estado = 'justificado'` es una falta con justificación (ausencia no perjudica el % de asistencia). En todos los reportes (`MiAsistencia.vue`, `MisReportes.vue`) el porcentaje de asistencia se calcula como `presentes / (total - justificados)`, es decir, las faltas justificadas quedan excluidas del denominador en vez de contar como ausencia.
 
@@ -117,6 +131,7 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **horarios**: SELECT admin / el docente dueño (`profesor_id = current_profesor_id()`) / `alumno_inscripto_en_curso(curso_id)`. Escritura solo admin (no hay UI todavía para que un docente cree sus propios horarios).
 - **inscripciones**: SELECT admin / el alumno propio / `docente_dicta_curso(curso_id)`. Escritura solo admin.
 - **asistencia**: SELECT admin / alumno propio / docente dueño del horario. INSERT/UPDATE/DELETE: docente dueño del horario, o admin.
+- **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
 
@@ -136,8 +151,9 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 2. `0002_fix_recursion_rls.sql` — corrige la recursión infinita entre `horarios` e `inscripciones` descrita arriba. **Depende de 0001.**
 3. `0003_import_alumnos_2do_curso.sql` — limpieza de cursos duplicados vacíos e importación del curso "2do - Gabinete de Informática" con sus 11 alumnos reales.
 4. `0004_estado_asistencia.sql` — reemplaza `asistencia.presente` (boolean) por `asistencia.estado` (varchar con `presente`/`ausente`/`justificado`), con backfill de los datos existentes.
+5. `0005_informes_asistencia.sql` — agrega `alumnos.telefono_padre` y la tabla `informes_asistencia` (informe diario que el docente remite a administración para avisarle a los padres por WhatsApp), con sus políticas RLS.
 
-1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 es nueva — falta pegarla en el SQL Editor. Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré las cuatro en orden antes de usar la app.
+1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 y 5 son nuevas — falta pegarlas en el SQL Editor. Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré las cinco en orden antes de usar la app.
 
 ### Cómo introspeccionar el estado real de una base (para verificar antes de asumir nada)
 

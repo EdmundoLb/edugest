@@ -17,8 +17,11 @@ const mensaje = ref('')
 const tipoMensaje = ref('success')
 const asistenciaPreviaExiste = ref(false)
 const confirmandoSobrescritura = ref(false)
+const informeRemitido = ref(null)
+const remitiendo = ref(false)
 
 const horarios = ref([])
+const profesorId = ref(null)
 const cursoSeleccionado = ref(null)
 const alumnos = ref([])
 const fechaSeleccionada = ref(hoyLocal())
@@ -80,6 +83,8 @@ async function cargarHorarios() {
       .single()
 
     if (profesor) {
+      profesorId.value = profesor.id
+
       const { data, error } = await supabase
         .from('horarios')
         .select(`
@@ -111,10 +116,20 @@ async function cargarAlumnos() {
   alumnos.value = []
   asistencia.value = {}
   observaciones.value = {}
+  informeRemitido.value = null
 
   try {
     const horario = horarioDelDia.value
     if (!horario) return
+
+    const { data: informe } = await supabase
+      .from('informes_asistencia')
+      .select('*')
+      .eq('horario_id', horario.id)
+      .eq('fecha', fechaSeleccionada.value)
+      .maybeSingle()
+
+    informeRemitido.value = informe
 
     const { data, error } = await supabase
       .from('inscripciones')
@@ -197,6 +212,38 @@ async function guardarAsistencia() {
     tipoMensaje.value = 'error'
   } finally {
     guardando.value = false
+  }
+}
+
+async function remitirInforme() {
+  if (!horarioDelDia.value || !profesorId.value) return
+
+  remitiendo.value = true
+  try {
+    const { data, error } = await supabase
+      .from('informes_asistencia')
+      .upsert(
+        {
+          horario_id: horarioDelDia.value.id,
+          fecha: fechaSeleccionada.value,
+          profesor_id: profesorId.value,
+          estado: 'pendiente',
+          creado_at: new Date().toISOString(),
+        },
+        { onConflict: 'horario_id,fecha' }
+      )
+      .select()
+      .single()
+
+    if (error) throw error
+
+    informeRemitido.value = data
+  } catch (e) {
+    console.error(e)
+    mensaje.value = 'Error al remitir el informe'
+    tipoMensaje.value = 'error'
+  } finally {
+    remitiendo.value = false
   }
 }
 
@@ -408,6 +455,18 @@ const totalJustificados = computed(() => {
             >
               <span v-if="guardando" class="spinner-small" />
               {{ guardando ? 'Guardando...' : 'Guardar Asistencia' }}
+            </button>
+          </div>
+
+          <div class="informe-section" v-if="asistenciaPreviaExiste">
+            <p v-if="informeRemitido" class="informe-estado informe-ok">
+              Informe remitido a administración el
+              {{ formatearFecha(informeRemitido.creado_at.slice(0, 10), { day: 'numeric', month: 'long' }) }}.
+              Ya puede enviarse a los padres.
+            </p>
+            <button class="btn-remitir" @click="remitirInforme" :disabled="remitiendo">
+              <span v-if="remitiendo" class="spinner-small" />
+              {{ remitiendo ? 'Remitiendo...' : informeRemitido ? 'Volver a remitir' : 'Remitir informe a administración' }}
             </button>
           </div>
         </div>
@@ -909,6 +968,52 @@ const totalJustificados = computed(() => {
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
+}
+
+.informe-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.informe-estado {
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+.informe-ok {
+  color: #6ee7b7;
+}
+
+.btn-remitir {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid rgba(0, 74, 173, 0.4);
+  border-radius: 8px;
+  background: rgba(0, 74, 173, 0.1);
+  color: #8fbcf5;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-remitir:hover:not(:disabled) {
+  background: rgba(0, 74, 173, 0.2);
+}
+
+.btn-remitir:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

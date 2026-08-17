@@ -77,6 +77,7 @@ function toggleMenu(e) {
             <router-link to="/Estudiantes" class="nav-link">Alumnos</router-link>
             <router-link to="/MisCursos" class="nav-link">Cursos</router-link>
             <router-link to="/MisReportes" class="nav-link">Reportes</router-link>
+            <router-link to="/InformesAsistencia" class="nav-link">Informes</router-link>
           </template>
 
           <div class="user-menu">

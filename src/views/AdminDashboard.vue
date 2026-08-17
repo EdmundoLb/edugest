@@ -6,7 +6,7 @@ import { hoyLocal, formatearFecha } from '@/lib/fecha'
 
 const { state } = useAuth()
 const loading = ref(true)
-const stats = ref({ alumnos: 0, profesores: 0, cursos: 0, asistenciaHoy: 0 })
+const stats = ref({ alumnos: 0, profesores: 0, cursos: 0, asistenciaHoy: 0, informesPendientes: 0 })
 const ultimosRegistros = ref([])
 
 onMounted(async () => {
@@ -28,11 +28,17 @@ async function cargarDashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('fecha', hoy)
 
+    const { count: informesPendientes } = await supabase
+      .from('informes_asistencia')
+      .select('*', { count: 'exact', head: true })
+      .eq('estado', 'pendiente')
+
     stats.value = {
       alumnos: alumnos || 0,
       profesores: profesores || 0,
       cursos: cursos || 0,
-      asistenciaHoy: asistenciaHoy || 0
+      asistenciaHoy: asistenciaHoy || 0,
+      informesPendientes: informesPendientes || 0
     }
 
     const { data: registros } = await supabase
@@ -97,6 +103,10 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
             <span class="stat-value">{{ stats.asistenciaHoy }}</span>
             <span class="stat-label">Asistencias hoy</span>
           </div>
+          <div class="stat-card" :class="{ ausente: stats.informesPendientes > 0 }">
+            <span class="stat-value">{{ stats.informesPendientes }}</span>
+            <span class="stat-label">Informes pendientes</span>
+          </div>
         </div>
 
         <div class="dashboard-sections">
@@ -125,6 +135,12 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
                   <line x1="6" y1="20" x2="6" y2="14" />
                 </svg>
                 Ver Reportes
+              </router-link>
+              <router-link to="/InformesAsistencia" class="action-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+                Revisar Informes
               </router-link>
             </div>
           </section>
@@ -218,7 +234,7 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -247,6 +263,10 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 
 .stat-card.presente .stat-value {
   color: #6ee7b7;
+}
+
+.stat-card.ausente .stat-value {
+  color: #fca5a5;
 }
 
 .dashboard-sections {

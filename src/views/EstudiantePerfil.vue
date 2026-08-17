@@ -2,13 +2,19 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const { esAdmin } = useAuth()
 
 const loading = ref(true)
 const error = ref('')
 const estudiante = ref(null)
+
+const editandoTelefonoPadre = ref(false)
+const telefonoPadreInput = ref('')
+const guardandoTelefonoPadre = ref(false)
 
 onMounted(async () => {
   await cargarEstudiante()
@@ -37,6 +43,31 @@ async function cargarEstudiante() {
 
 function volver() {
   router.push('/Estudiantes')
+}
+
+function editarTelefonoPadre() {
+  telefonoPadreInput.value = estudiante.value.telefono_padre || ''
+  editandoTelefonoPadre.value = true
+}
+
+async function guardarTelefonoPadre() {
+  guardandoTelefonoPadre.value = true
+  try {
+    const nuevoTelefono = telefonoPadreInput.value.trim() || null
+    const { error: err } = await supabase
+      .from('alumnos')
+      .update({ telefono_padre: nuevoTelefono })
+      .eq('id', estudiante.value.id)
+
+    if (err) throw err
+
+    estudiante.value.telefono_padre = nuevoTelefono
+    editandoTelefonoPadre.value = false
+  } catch (e) {
+    console.error(e)
+  } finally {
+    guardandoTelefonoPadre.value = false
+  }
 }
 
 const currentState = computed(() => {
@@ -91,6 +122,33 @@ const currentState = computed(() => {
                   <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
                 </svg>
                 <span>{{ estudiante.telefono || '—' }}</span>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <label>Teléfono del padre/tutor</label>
+              <div v-if="!editandoTelefonoPadre" class="info-value">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+                </svg>
+                <span>{{ estudiante.telefono_padre || '—' }}</span>
+                <button v-if="esAdmin()" class="btn-editar-inline" @click="editarTelefonoPadre" title="Editar">
+                  ✎
+                </button>
+              </div>
+              <div v-else class="editar-telefono-padre">
+                <input
+                  v-model="telefonoPadreInput"
+                  type="tel"
+                  placeholder="Ej: +591 70000000 (con código de país)"
+                  :disabled="guardandoTelefonoPadre"
+                />
+                <button class="btn-guardar-inline" @click="guardarTelefonoPadre" :disabled="guardandoTelefonoPadre">
+                  {{ guardandoTelefonoPadre ? 'Guardando...' : 'Guardar' }}
+                </button>
+                <button class="btn-cancelar-inline" @click="editandoTelefonoPadre = false" :disabled="guardandoTelefonoPadre">
+                  Cancelar
+                </button>
               </div>
             </div>
 
@@ -303,6 +361,82 @@ const currentState = computed(() => {
   height: 18px;
   color: rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
+}
+
+.btn-editar-inline {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 0.9375rem;
+  padding: 0.125rem 0.375rem;
+  transition: color 0.2s;
+}
+
+.btn-editar-inline:hover {
+  color: #004aad;
+}
+
+.editar-telefono-padre {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editar-telefono-padre input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+.editar-telefono-padre input:focus {
+  outline: none;
+  border-color: #004aad;
+}
+
+.btn-guardar-inline,
+.btn-cancelar-inline {
+  padding: 0.625rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  border: 1px solid transparent;
+}
+
+.btn-guardar-inline {
+  background: #004aad;
+  color: #fff;
+  border: none;
+}
+
+.btn-guardar-inline:hover:not(:disabled) {
+  background: #003380;
+}
+
+.btn-cancelar-inline {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.btn-cancelar-inline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-guardar-inline:disabled,
+.btn-cancelar-inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .fade-enter-active,
