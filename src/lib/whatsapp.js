@@ -39,3 +39,30 @@ export function armarMensajeAsistencia({ alumno, curso, fecha, estado, observaci
 
   return mensaje
 }
+
+// Link sin número de teléfono: WhatsApp abre un selector de chat/grupo en vez
+// de un contacto fijo, así se puede elegir el grupo del curso a mano.
+export function linkWhatsappGrupo(mensaje) {
+  return `https://wa.me/?text=${encodeURIComponent(mensaje)}`
+}
+
+export function armarMensajeGrupoAsistencia({ curso, fecha, ausentes, justificados }) {
+  const fechaLarga = formatearFecha(fecha, { weekday: 'long', day: 'numeric', month: 'long' })
+  let mensaje = `📋 *Reporte de asistencia — ${curso}*\n${fechaLarga}`
+
+  if (ausentes.length) {
+    mensaje += `\n\n*Ausentes:*\n` + ausentes.map((a) => `• ${a.nombre} ${a.apellido}`).join('\n')
+  }
+
+  if (justificados.length) {
+    mensaje +=
+      `\n\n*Justificados:*\n` +
+      justificados
+        .map((a) => `• ${a.nombre} ${a.apellido}${a.observacion ? ` — ${a.observacion}` : ''}`)
+        .join('\n')
+  }
+
+  mensaje += '\n\n— Centro Cultural Gymmart'
+
+  return mensaje
+}

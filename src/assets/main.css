@@ -1,5 +1,16 @@
 @import './base.css';
 
+:root {
+  --color-primary: #004aad;
+  --color-primary-dark: #022451;
+  --color-success: #10b981;
+  --color-success-text: #6ee7b7;
+  --color-danger: #ef4444;
+  --color-danger-text: #fca5a5;
+  --color-warning: #eab308;
+  --color-warning-text: #fcd34d;
+}
+
 * {
   margin: 0;
   padding: 0;

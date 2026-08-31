@@ -1,5 +1,5 @@
 <template>
-  <div class="spinner" :class="size" />
+  <div class="spinner" :class="[size, variant]" />
 </template>
 
 <script setup>
@@ -8,6 +8,11 @@ defineProps({
     type: String,
     default: 'medium',
     validator: (v) => ['small', 'medium', 'large'].includes(v)
+  },
+  variant: {
+    type: String,
+    default: 'primary',
+    validator: (v) => ['primary', 'light'].includes(v)
   }
 })
 </script>
@@ -18,6 +23,11 @@ defineProps({
   border-top-color: var(--color-primary, #004aad);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
+}
+
+.spinner.light {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
 }
 
 .spinner.small {

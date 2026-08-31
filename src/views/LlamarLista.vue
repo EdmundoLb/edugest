@@ -5,6 +5,7 @@ import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { hoyLocal, diaSemanaDeFecha, formatearFecha } from '@/lib/fecha'
 import { formatearDias, indiceDia } from '@/lib/dias'
+import Spinner from '@/components/Spinner.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -294,7 +295,7 @@ const totalJustificados = computed(() => {
 
     <main class="page-content">
       <div v-if="loading" class="loading-state">
-        <div class="spinner" />
+        <Spinner size="large" />
         <p>Cargando...</p>
       </div>
 
@@ -453,7 +454,7 @@ const totalJustificados = computed(() => {
               @click="guardarAsistencia"
               :disabled="guardando"
             >
-              <span v-if="guardando" class="spinner-small" />
+              <Spinner v-if="guardando" size="small" variant="light" />
               {{ guardando ? 'Guardando...' : 'Guardar Asistencia' }}
             </button>
           </div>
@@ -465,14 +466,14 @@ const totalJustificados = computed(() => {
               Ya puede enviarse a los padres.
             </p>
             <button class="btn-remitir" @click="remitirInforme" :disabled="remitiendo">
-              <span v-if="remitiendo" class="spinner-small" />
+              <Spinner v-if="remitiendo" size="small" variant="light" />
               {{ remitiendo ? 'Remitiendo...' : informeRemitido ? 'Volver a remitir' : 'Remitir informe a administración' }}
             </button>
           </div>
         </div>
 
         <div v-if="loadingAlumnos" class="loading-alumnos">
-          <div class="spinner" />
+          <Spinner size="large" />
           <p>Cargando alumnos...</p>
         </div>
       </div>
@@ -556,20 +557,6 @@ const totalJustificados = computed(() => {
   text-align: center;
   padding: 4rem 2rem;
   color: rgba(255, 255, 255, 0.5);
-}
-
-.spinner {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .filtros-section {
@@ -959,15 +946,6 @@ const totalJustificados = computed(() => {
 .btn-guardar:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
 }
 
 .informe-section {

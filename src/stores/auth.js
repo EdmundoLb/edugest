@@ -11,6 +11,23 @@ const state = reactive({
 
 let authStateListenerUnsubscribe = null
 
+const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000 // 1 día
+const SESSION_STARTED_KEY = 'sesion_iniciada_en'
+
+function marcarInicioSesion() {
+  localStorage.setItem(SESSION_STARTED_KEY, Date.now().toString())
+}
+
+function limpiarInicioSesion() {
+  localStorage.removeItem(SESSION_STARTED_KEY)
+}
+
+function sesionExpiradaPorAntiguedad() {
+  const inicio = localStorage.getItem(SESSION_STARTED_KEY)
+  if (!inicio) return false
+  return Date.now() - Number(inicio) > MAX_SESSION_AGE_MS
+}
+
 export function useAuth() {
   async function initSession() {
     if (authStateListenerUnsubscribe) {
@@ -22,7 +39,9 @@ export function useAuth() {
     state.session = session
     state.user = session?.user ?? null
 
-    if (session?.user) {
+    if (session?.user && sesionExpiradaPorAntiguedad()) {
+      await logout()
+    } else if (session?.user) {
       await cargarPerfil()
     } else {
       state.perfil = null
@@ -34,6 +53,12 @@ export function useAuth() {
       state.session = session
       state.user = session?.user ?? null
 
+      if (_event === 'SIGNED_IN') {
+        marcarInicioSesion()
+      } else if (_event === 'SIGNED_OUT') {
+        limpiarInicioSesion()
+      }
+
       if (session?.user) {
         await cargarPerfil()
       } else {
@@ -43,6 +68,14 @@ export function useAuth() {
     })
 
     authStateListenerUnsubscribe = subscription.unsubscribe.bind(subscription)
+  }
+
+  async function verificarExpiracion() {
+    if (state.session && sesionExpiradaPorAntiguedad()) {
+      await logout()
+      return true
+    }
+    return false
   }
 
   async function cargarPerfil() {
@@ -143,5 +176,6 @@ export function useAuth() {
     esAdmin,
     cargarPerfil,
     cleanup,
+    verificarExpiracion,
   }
 }

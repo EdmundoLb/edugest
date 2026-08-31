@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import Pagination from '@/components/Pagination.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import Spinner from '@/components/Spinner.vue'
 
 const router = useRouter()
 const { state, esAdmin } = useAuth()
@@ -140,29 +142,31 @@ const currentState = computed(() => {
       <transition name="fade" mode="out-in">
         <div :key="currentState">
           <div v-if="loading || currentState === 'loading-estudiantes'" class="loading-state">
-            <div class="spinner" />
+            <Spinner size="large" />
             <p>Cargando alumnos...</p>
           </div>
 
-          <div v-else-if="currentState === 'sin-curso'" class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87" />
-              <path d="M16 3.13a4 4 0 010 7.75" />
-            </svg>
-            <p>Elegí un curso para ver sus alumnos</p>
-          </div>
+          <EmptyState v-else-if="currentState === 'sin-curso'" title="Elegí un curso para ver sus alumnos">
+            <template #icon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                <path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            </template>
+          </EmptyState>
 
-          <div v-else-if="currentState === 'empty'" class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87" />
-              <path d="M16 3.13a4 4 0 010 7.75" />
-            </svg>
-            <p>No hay alumnos inscriptos en este curso</p>
-          </div>
+          <EmptyState v-else-if="currentState === 'empty'" title="No hay alumnos inscriptos en este curso">
+            <template #icon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                <path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            </template>
+          </EmptyState>
 
           <div v-else class="students-grid">
             <div
@@ -304,33 +308,6 @@ const currentState = computed(() => {
 }
 
 .loading-state,
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.spinner {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 1rem;
-  color: rgba(255, 255, 255, 0.2);
-}
-
 .students-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

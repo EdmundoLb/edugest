@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
+import Spinner from '@/components/Spinner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,7 +95,7 @@ const currentState = computed(() => {
       <transition name="fade" mode="out-in">
         <div :key="currentState">
           <div v-if="loading" class="loading-state">
-            <div class="spinner" />
+            <Spinner size="medium" />
             <p>Cargando perfil...</p>
           </div>
 
@@ -253,19 +254,6 @@ const currentState = computed(() => {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.spinner {
-  width: 24px;
-  height: 24px;
-  margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 .profile-card {
   width: 100%;

@@ -3,7 +3,7 @@ import PaginaInicio from '@/views/PaginaInicio.vue'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 
-const { state: authState } = useAuth()
+const { state: authState, verificarExpiracion } = useAuth()
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -108,6 +108,10 @@ router.beforeEach(async (to) => {
     const session = await resolverSesion()
 
     if (!session) {
+      return '/login'
+    }
+
+    if (await verificarExpiracion()) {
       return '/login'
     }
 

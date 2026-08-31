@@ -4,9 +4,15 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { formatearFecha } from '@/lib/fecha'
-import { linkWhatsapp, armarMensajeAsistencia } from '@/lib/whatsapp'
+import {
+  linkWhatsapp,
+  armarMensajeAsistencia,
+  linkWhatsappGrupo,
+  armarMensajeGrupoAsistencia,
+} from '@/lib/whatsapp'
 import Pagination from '@/components/Pagination.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import Spinner from '@/components/Spinner.vue'
 
 const router = useRouter()
 const { state } = useAuth()
@@ -117,6 +123,23 @@ function waLink(alumno) {
   )
 }
 
+const ausentesYJustificados = computed(() => ({
+  ausentes: detalleAlumnos.value.filter((a) => a.estado === 'ausente'),
+  justificados: detalleAlumnos.value.filter((a) => a.estado === 'justificado'),
+}))
+
+function linkGrupo() {
+  if (!informeAbierto.value) return null
+  return linkWhatsappGrupo(
+    armarMensajeGrupoAsistencia({
+      curso: informeAbierto.value.horarios?.cursos?.nombre || 'el curso',
+      fecha: informeAbierto.value.fecha,
+      ausentes: ausentesYJustificados.value.ausentes,
+      justificados: ausentesYJustificados.value.justificados,
+    })
+  )
+}
+
 async function marcarRevisado(informe) {
   marcandoRevisado.value = true
   try {
@@ -162,7 +185,7 @@ async function marcarRevisado(informe) {
 
     <main class="page-content">
       <div v-if="loading" class="loading-state">
-        <div class="spinner" />
+        <Spinner size="large" />
         <p>Cargando informes...</p>
       </div>
 
@@ -210,11 +233,25 @@ async function marcarRevisado(informe) {
 
             <div v-if="informeAbierto?.id === informe.id" class="informe-detalle">
               <div v-if="cargandoDetalle" class="loading-detalle">
-                <div class="spinner-small" />
+                <Spinner size="small" />
                 <span>Cargando alumnos...</span>
               </div>
 
-              <div v-else class="detalle-alumnos">
+              <div v-else>
+                <a
+                  v-if="ausentesYJustificados.ausentes.length || ausentesYJustificados.justificados.length"
+                  :href="linkGrupo()"
+                  target="_blank"
+                  rel="noopener"
+                  class="btn-whatsapp-grupo"
+                >
+                  Enviar reporte de ausentes/justificados al grupo
+                </a>
+                <p v-else class="sin-ausencias">
+                  Sin ausentes ni justificados que reportar en esta fecha.
+                </p>
+
+                <div class="detalle-alumnos">
                 <div v-for="alumno in detalleAlumnos" :key="alumno.id" class="detalle-alumno">
                   <div class="detalle-alumno-info">
                     <span class="detalle-nombre">{{ alumno.nombre }} {{ alumno.apellido }}</span>
@@ -234,6 +271,7 @@ async function marcarRevisado(informe) {
                     Enviar por WhatsApp
                   </a>
                   <span v-else class="sin-telefono">Sin teléfono cargado</span>
+                </div>
                 </div>
               </div>
 
@@ -336,29 +374,6 @@ async function marcarRevisado(informe) {
   text-align: center;
   padding: 4rem 2rem;
   color: rgba(255, 255, 255, 0.5);
-}
-
-.spinner {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .filtro-tabs {
@@ -543,6 +558,33 @@ async function marcarRevisado(informe) {
   white-space: nowrap;
 }
 
+.btn-whatsapp-grupo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  background: rgba(37, 211, 102, 0.15);
+  border: 1px solid rgba(37, 211, 102, 0.4);
+  color: #6ee7b7;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-whatsapp-grupo:hover {
+  background: rgba(37, 211, 102, 0.25);
+}
+
+.sin-ausencias {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 1rem;
+}
+
 .informe-acciones {
   margin-top: 1.25rem;
   display: flex;
@@ -571,7 +613,7 @@ async function marcarRevisado(informe) {
   cursor: not-allowed;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .page-content {
     padding: 1.25rem;
   }

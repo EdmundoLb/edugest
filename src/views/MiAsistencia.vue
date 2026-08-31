@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { parseFechaLocal } from '@/lib/fecha'
+import Spinner from '@/components/Spinner.vue'
 
 const { state } = useAuth()
 const loading = ref(true)
@@ -101,7 +102,7 @@ const asistenciaPorCurso = computed(() => {
 
     <main class="page-content">
       <div v-if="loading" class="loading-state">
-        <div class="spinner" />
+        <Spinner size="large" />
         <p>Cargando asistencia...</p>
       </div>
 
@@ -248,19 +249,6 @@ const asistenciaPorCurso = computed(() => {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.spinner {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #004aad;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 .welcome-section {
   margin-bottom: 1.5rem;

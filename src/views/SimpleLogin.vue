@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
+import Spinner from '@/components/Spinner.vue'
 
 const router = useRouter()
 const { login, initSession } = useAuth()
@@ -228,7 +229,7 @@ function hideResetForm() {
         </transition>
 
         <button type="submit" class="btn-login" :disabled="loading">
-          <span v-if="loading" class="spinner" />
+          <Spinner v-if="loading" size="small" variant="light" />
           <span v-else>
             <svg
               viewBox="0 0 24 24"
@@ -279,7 +280,7 @@ function hideResetForm() {
         </transition>
 
         <button type="submit" class="btn-login" :disabled="loading">
-          <span v-if="loading" class="spinner" />
+          <Spinner v-if="loading" size="small" variant="light" />
           <span>{{ loading ? 'Enviando...' : 'Enviar correo de recuperación' }}</span>
         </button>
 
@@ -659,21 +660,6 @@ function hideResetForm() {
 .btn-icon {
   width: 18px;
   height: 18px;
-}
-
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .register-link {

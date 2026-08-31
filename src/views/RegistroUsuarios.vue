@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
+import Spinner from '@/components/Spinner.vue'
 
 const nombre = ref('')
 const apellido = ref('')
@@ -264,7 +265,7 @@ async function handleRegister() {
         </transition>
 
         <button type="submit" class="btn-register" :disabled="loading">
-          <span v-if="loading" class="spinner" />
+          <Spinner v-if="loading" size="small" variant="light" />
           <span>{{ loading ? 'Creando cuenta...' : 'Crear cuenta' }}</span>
         </button>
       </form>
@@ -556,19 +557,6 @@ async function handleRegister() {
 .btn-register:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .login-link {
