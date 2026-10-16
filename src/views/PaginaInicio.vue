@@ -1,21 +1,25 @@
 <script setup>
+import { useAuth } from '@/stores/auth'
+
+const { state, rutaInicio } = useAuth()
+
 const features = [
   {
     number: '01',
     title: 'Control de Asistencia',
-    desc: 'Registro preciso de entrada y salida de alumnos con seguimiento en tiempo real de ausencias y retardos.',
+    desc: 'Los docentes pasan lista desde el celular: presente, ausente o justificado, con observaciones por alumno.',
     icon: 'check',
   },
   {
     number: '02',
     title: 'Gestión de Alumnos',
-    desc: 'Perfiles completos con datos de contacto, matrícula, horarios y expediente académico centralizado.',
+    desc: 'Alumnos organizados por curso, con datos de contacto y aviso a las familias por WhatsApp.',
     icon: 'users',
   },
   {
     number: '03',
-    title: 'Reportes Automáticos',
-    desc: 'Estadísticas de asistencia, exportación de datos y generación de reportes para la toma de decisiones.',
+    title: 'Reportes y Alertas',
+    desc: 'Reportes mensuales por curso exportables a Excel y PDF, y alertas de alumnos con muchas faltas.',
     icon: 'chart',
   },
 ]
@@ -27,12 +31,15 @@ const features = [
       <div class="hero-grid" />
       <div class="hero-glow" />
       <div class="hero-content">
-        <div class="hero-badge">Plataforma de Gestión Académico</div>
-        <h1 class="hero-title">Centro Cultural Gymmart</h1>
+        <div class="hero-badge">Control de asistencia</div>
+        <h1 class="hero-title">EduGest</h1>
         <p class="hero-subtitle">
-          Control de asistencia inteligente y administración integral<br />
-          para instituciones educativas modernas.
+          Asistencia de alumnos, reportes por curso y avisos a las familias,<br />
+          en un solo lugar.
         </p>
+        <router-link :to="state.session ? rutaInicio() : '/login'" class="hero-cta">
+          {{ state.session ? 'Ir a mi panel' : 'Ingresar' }}
+        </router-link>
       </div>
     </section>
 
@@ -47,17 +54,35 @@ const features = [
             <div class="feature-number">{{ feat.number }}</div>
             <div class="feature-body">
               <div class="feature-icon">
-                <svg v-if="feat.icon === 'check'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg
+                  v-if="feat.icon === 'check'"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
                   <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
                   <rect x="9" y="3" width="6" height="4" rx="1" />
                   <path d="M9 14l2 2 4-4" />
                 </svg>
-                <svg v-else-if="feat.icon === 'users'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg
+                  v-else-if="feat.icon === 'users'"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
                   <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
                   <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                 </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg
+                  v-else
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
                   <path d="M18 20V10M12 20V4M6 20v-6" />
                 </svg>
               </div>
@@ -84,30 +109,35 @@ const features = [
 
 <style scoped>
 .landing {
-  background: #000000;
-  color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 }
 
 /* ── Hero ── */
 
 .hero {
   position: relative;
-  min-height: calc(100vh - 73px);
+  min-height: calc(100vh - var(--navbar-height));
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: linear-gradient(135deg, #000000 0%, #022451 50%, #004aad 100%);
-  padding-top: 73px;
+  background: var(--auth-bg);
 }
 
 .hero-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(var(--hero-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-grid) 1px, transparent 1px);
   background-size: 60px 60px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 70%);
@@ -134,13 +164,13 @@ const features = [
 .hero-badge {
   display: inline-block;
   padding: 0.375rem 1rem;
-  background: rgba(0, 74, 173, 0.2);
-  border: 1px solid rgba(0, 74, 173, 0.4);
+  background: var(--primary-soft-strong);
+  border: 1px solid var(--primary-border);
   border-radius: 999px;
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #6ea8fe;
+  color: var(--primary-text);
   font-weight: 500;
   margin-bottom: 2rem;
 }
@@ -150,18 +180,18 @@ const features = [
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.05;
-  color: #ffffff;
+  color: var(--text);
   margin-bottom: 1.5rem;
 }
 
 .hero-subtitle {
   font-size: 1.0625rem;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
 }
 
 .features {
-  background: #000000;
+  background: var(--bg);
   padding: 7rem 2rem;
 }
 
@@ -180,7 +210,7 @@ const features = [
   font-size: 0.6875rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #004aad;
+  color: var(--primary-text);
   font-weight: 600;
   margin-bottom: 1rem;
 }
@@ -190,7 +220,7 @@ const features = [
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
-  color: #ffffff;
+  color: var(--text);
 }
 
 .features-list {
@@ -204,22 +234,22 @@ const features = [
   flex-direction: column;
   gap: 1rem;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   transition: all 0.3s ease;
 }
 
 .feature-card:hover {
   transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(0, 74, 173, 0.4);
+  background: var(--surface-2);
+  border-color: var(--primary-border);
 }
 
 .feature-number {
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #004aad;
+  color: var(--primary-text);
   letter-spacing: 0.04em;
 }
 
@@ -231,11 +261,11 @@ const features = [
   width: 44px;
   height: 44px;
   padding: 10px;
-  background: rgba(0, 74, 173, 0.15);
+  background: var(--primary-soft-strong);
   border: none;
   border-radius: 12px;
   margin-bottom: 1rem;
-  color: #6ea8fe;
+  color: var(--primary-text);
 }
 
 .feature-icon svg {
@@ -246,7 +276,7 @@ const features = [
 .feature-title {
   font-size: 1.0625rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text);
   margin-bottom: 0.5rem;
   letter-spacing: -0.01em;
 }
@@ -254,14 +284,14 @@ const features = [
 .feature-desc {
   font-size: 0.875rem;
   line-height: 1.65;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   max-width: 520px;
 }
 
 /* ── Quote ── */
 
 .quote {
-  background: #022451;
+  background: var(--surface);
   padding: 5rem 2rem;
 }
 
@@ -276,13 +306,13 @@ const features = [
 .quote-line {
   flex: 1;
   height: 1px;
-  background: #004aad;
+  background: var(--primary);
 }
 
 .quote-text {
   font-size: 1.0625rem;
   line-height: 1.7;
-  color: #ffffff;
+  color: var(--text);
   text-align: center;
   font-weight: 500;
 }
@@ -342,5 +372,21 @@ const features = [
   .hero-title {
     font-size: 2rem;
   }
+}
+.hero-cta {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.875rem 2rem;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: background 0.15s;
+}
+
+.hero-cta:hover {
+  background: var(--primary-hover);
 }
 </style>

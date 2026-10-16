@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
 
 const nombre = ref('')
 const apellido = ref('')
@@ -78,7 +78,7 @@ async function handleRegister() {
     <div class="register-card">
       <div class="brand">
         <div class="brand-icon">
-          <img src="@/images/CCGLOGO.png" alt="Centro Cultural Gymmart" />
+          <img src="@/images/edugest-logo.png" alt="EduGest" class="logo-edugest" />
         </div>
         <h1>Centro Cultural Gymmart</h1>
         <p class="brand-sub">Crea tu cuenta</p>
@@ -86,7 +86,13 @@ async function handleRegister() {
 
       <transition name="fade">
         <div v-if="success" class="success-msg">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="success-icon">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="success-icon"
+          >
             <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
@@ -98,7 +104,13 @@ async function handleRegister() {
         <div class="field">
           <label for="nombre">Nombre</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
@@ -116,7 +128,13 @@ async function handleRegister() {
         <div class="field">
           <label for="apellido">Apellido</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
@@ -134,7 +152,13 @@ async function handleRegister() {
         <div class="field">
           <label for="ci">Cédula de identidad</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="3" y="4" width="18" height="16" rx="2" />
               <line x1="7" y1="9" x2="17" y2="9" />
               <line x1="7" y1="13" x2="13" y2="13" />
@@ -153,8 +177,16 @@ async function handleRegister() {
         <div class="field">
           <label for="telefono">Teléfono (opcional)</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
+              />
             </svg>
             <input
               id="telefono"
@@ -170,7 +202,13 @@ async function handleRegister() {
         <div class="field" v-if="rol === 'docente'">
           <label for="especialidad">Especialidad (opcional)</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" />
               <path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
             </svg>
@@ -188,8 +226,16 @@ async function handleRegister() {
         <div class="field">
           <label for="email">Correo electrónico</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
             </svg>
             <input
               id="email"
@@ -205,7 +251,13 @@ async function handleRegister() {
         <div class="field">
           <label for="password">Contraseña</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0110 0v4" />
             </svg>
@@ -223,7 +275,13 @@ async function handleRegister() {
         <div class="field">
           <label for="confirm">Confirmar contraseña</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0110 0v4" />
             </svg>
@@ -241,7 +299,13 @@ async function handleRegister() {
         <div class="field">
           <label for="rol">Tipo de cuenta</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
               <circle cx="9" cy="7" r="4" />
               <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
@@ -255,7 +319,13 @@ async function handleRegister() {
 
         <transition name="fade">
           <div v-if="error" class="error-msg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="error-icon"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
@@ -265,7 +335,7 @@ async function handleRegister() {
         </transition>
 
         <button type="submit" class="btn-register" :disabled="loading">
-          <Spinner v-if="loading" size="small" variant="light" />
+          <AppSpinner v-if="loading" size="small" variant="light" />
           <span>{{ loading ? 'Creando cuenta...' : 'Crear cuenta' }}</span>
         </button>
       </form>
@@ -286,7 +356,7 @@ async function handleRegister() {
   align-items: center;
   justify-content: center;
   padding-top: 100px;
-  background: linear-gradient(135deg, #000000 0%, #022451 50%, #004aad 100%);
+  background: var(--auth-bg);
   overflow-y: auto;
   font-family:
     'Inter',
@@ -339,19 +409,26 @@ async function handleRegister() {
 }
 
 @keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -30px) scale(1.05); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
 }
 
 .register-card {
   position: relative;
   width: 100%;
   max-width: 420px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-2);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 2.5rem 2rem;
   box-shadow:
@@ -381,14 +458,14 @@ async function handleRegister() {
 .brand h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   letter-spacing: -0.02em;
 }
 
 .brand-sub {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   font-weight: 400;
 }
 
@@ -407,7 +484,7 @@ async function handleRegister() {
 .field label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
   letter-spacing: 0.01em;
 }
 
@@ -422,36 +499,36 @@ async function handleRegister() {
   left: 12px;
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-subtle);
   pointer-events: none;
   transition: color 0.2s;
 }
 
 .input-wrapper:focus-within .input-icon {
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .field input {
   width: 100%;
   padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   font-size: 0.9375rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
   transition: all 0.2s;
   outline: none;
   font-family: inherit;
 }
 
 .field input::placeholder {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-subtle);
 }
 
 .field input:focus {
-  border-color: #004aad;
-  box-shadow: 0 0 0 3px rgba(0, 74, 173, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+  background: var(--surface-2);
 }
 
 .field input:disabled {
@@ -462,41 +539,36 @@ async function handleRegister() {
 .rol-select {
   width: 100%;
   padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   font-size: 0.9375rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
   transition: all 0.2s;
   outline: none;
   font-family: inherit;
   cursor: pointer;
   appearance: none;
-  color-scheme: dark;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.25)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a98ab' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
 
 .rol-select:focus {
-  border-color: #004aad;
-  box-shadow: 0 0 0 3px rgba(0, 74, 173, 0.12);
-  background-color: rgba(255, 255, 255, 0.06);
-}
-
-.rol-select option {
-  background: #022451;
-  color: #fff;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+  background-color: var(--surface-2);
 }
 
 .error-msg {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 0.8125rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.15);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
 }
@@ -511,10 +583,10 @@ async function handleRegister() {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: #6ee7b7;
+  color: var(--success-text);
   font-size: 0.875rem;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: var(--success-soft);
+  border: 1px solid var(--success-border);
   padding: 0.75rem 1rem;
   border-radius: 10px;
   margin-bottom: 1.5rem;
@@ -524,7 +596,7 @@ async function handleRegister() {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #10b981;
+  color: var(--success-text);
 }
 
 .btn-register {
@@ -536,7 +608,7 @@ async function handleRegister() {
   border: none;
   border-radius: 10px;
   background: linear-gradient(135deg, #022451, #004aad);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
@@ -545,7 +617,7 @@ async function handleRegister() {
 }
 
 .btn-register:hover:not(:disabled) {
-  background: linear-gradient(135deg, #003380, #003380);
+  background: var(--primary-hover);
   box-shadow: 0 4px 16px rgba(0, 74, 173, 0.5);
   transform: translateY(-1px);
 }
@@ -563,24 +635,26 @@ async function handleRegister() {
   margin-top: 1.5rem;
   text-align: center;
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
 }
 
 .login-link a {
-  color: #004aad;
+  color: var(--primary-text);
   text-decoration: none;
   font-weight: 600;
   transition: color 0.2s;
 }
 
 .login-link a:hover {
-  color: #022451;
+  color: var(--primary-text);
   text-decoration: underline;
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .fade-enter-from,

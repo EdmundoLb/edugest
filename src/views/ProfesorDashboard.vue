@@ -1,46 +1,50 @@
 <script setup>
+import PanelRiesgo from '@/components/PanelRiesgo.vue'
+import { formatearHora } from '@/lib/fecha'
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
+import { ordenarPorDia } from '@/lib/dias'
 
-const { state, initSession } = useAuth()
+const toast = useToast()
+
+const { state } = useAuth()
 const misHorarios = ref([])
 const loadingHorarios = ref(true)
 
 onMounted(async () => {
-  await initSession()
   await cargarMisHorarios()
 })
 
 async function cargarMisHorarios() {
   loadingHorarios.value = true
   try {
-    const { data: profesor } = await supabase
-      .from('profesores')
-      .select('id')
-      .eq('perfil_id', state.perfil?.id)
-      .single()
+    // Fila de profesores del usuario logueado, ya cargada por el store de auth.
+    const profesor = state.datosUsuario
 
     if (profesor) {
       const { data, error } = await supabase
         .from('horarios')
-        .select(`
+        .select(
+          `
           id,
           dia_semana,
           hora_inicio,
           hora_fin,
           turno,
-          cursos (nombre)
-        `)
+          cursos (id, nombre)
+        `,
+        )
         .eq('profesor_id', profesor.id)
-        .order('dia_semana')
 
       if (!error) {
-        misHorarios.value = data || []
+        misHorarios.value = ordenarPorDia(data || [])
       }
     }
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar tus horarios', e)
   } finally {
     loadingHorarios.value = false
   }
@@ -53,30 +57,20 @@ const nombreProfesor = computed(() => {
 })
 
 const totalCursos = computed(() => {
-  const cursosUnicos = new Set(misHorarios.value.map(h => h.curso_id))
+  const cursosUnicos = new Set(misHorarios.value.map((h) => h.cursos?.id).filter(Boolean))
   return cursosUnicos.size
 })
 
 const diasActivos = computed(() => {
-  return new Set(misHorarios.value.map(h => h.dia_semana)).size
+  return new Set(misHorarios.value.map((h) => h.dia_semana)).size
 })
 </script>
 
 <template>
   <div class="dashboard">
-    <header class="dashboard-header">
-      <h1>Panel del Profesor</h1>
-      <div class="header-right">
-        <span class="user-name">{{ nombreProfesor }}</span>
-      </div>
-    </header>
+    <PageHeader titulo="Panel del profesor" :subtitulo="`Hola, ${nombreProfesor}`" />
 
-    <main class="dashboard-content">
-      <div class="welcome-section">
-        <h2>Bienvenido, {{ nombreProfesor }}</h2>
-        <p>Gestiona tus cursos, pasa lista y genera reportes de asistencia.</p>
-      </div>
-
+    <div class="dashboard-content">
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon">
@@ -158,19 +152,10 @@ const diasActivos = computed(() => {
             <span class="action-title">Mis Reportes</span>
             <span class="action-desc">Ver historial de reportes</span>
           </router-link>
-
-          <router-link to="/MiAsistencia" class="action-card">
-            <div class="action-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <span class="action-title">Mi Asistencia</span>
-            <span class="action-desc">Ver mi historial de asistencia</span>
-          </router-link>
         </div>
       </div>
+
+      <PanelRiesgo class="panel-riesgo" />
 
       <div class="horarios-section" v-if="!loadingHorarios && misHorarios.length > 0">
         <h3>Próximos Horarios</h3>
@@ -182,58 +167,29 @@ const diasActivos = computed(() => {
             </div>
             <div class="horario-tiempo">
               <span class="horario-dia">{{ horario.dia_semana }}</span>
-              <span class="horario-hora">{{ horario.hora_inicio }} - {{ horario.hora_fin }}</span>
+              <span class="horario-hora"
+                >{{ formatearHora(horario.hora_inicio) }} –
+                {{ formatearHora(horario.hora_fin) }}</span
+              >
             </div>
           </div>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .dashboard {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dashboard-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-name {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .btn-logout {
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-size: 0.8125rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -241,9 +197,9 @@ const diasActivos = computed(() => {
 }
 
 .btn-logout:hover:not(:disabled) {
-  background: rgba(166, 166, 166, 0.15);
-  border-color: rgba(166, 166, 166, 0.3);
-  color: #d9d9d9;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-2);
 }
 
 .btn-logout:disabled {
@@ -252,23 +208,9 @@ const diasActivos = computed(() => {
 }
 
 .dashboard-content {
-  padding: 2rem;
+  padding: 2rem 1.5rem;
   max-width: 1200px;
-}
-
-.welcome-section {
-  margin-bottom: 2rem;
-}
-
-.welcome-section h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.welcome-section p {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.9375rem;
+  margin: 0 auto;
 }
 
 .stats-grid {
@@ -283,8 +225,8 @@ const diasActivos = computed(() => {
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
@@ -294,14 +236,14 @@ const diasActivos = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 74, 173, 0.1);
+  background: var(--primary-soft);
   border-radius: 10px;
 }
 
 .stat-icon svg {
   width: 24px;
   height: 24px;
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .stat-info {
@@ -312,12 +254,12 @@ const diasActivos = computed(() => {
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 .stat-label {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .actions-section h3,
@@ -325,7 +267,7 @@ const diasActivos = computed(() => {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 1rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
 }
 
 .actions-grid {
@@ -340,26 +282,26 @@ const diasActivos = computed(() => {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   text-decoration: none;
   transition: all 0.2s;
 }
 
 .action-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(0, 74, 173, 0.4);
+  background: var(--surface-2);
+  border-color: var(--primary-border);
   transform: translateY(-2px);
 }
 
 .action-card.primary {
-  border-color: rgba(0, 74, 173, 0.4);
-  background: rgba(0, 74, 173, 0.08);
+  border-color: var(--primary-border);
+  background: var(--primary-soft);
 }
 
 .action-card.primary:hover {
-  background: rgba(0, 74, 173, 0.15);
+  background: var(--primary-soft-strong);
 }
 
 .action-icon {
@@ -368,30 +310,30 @@ const diasActivos = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 74, 173, 0.1);
+  background: var(--primary-soft);
   border-radius: 8px;
   margin-bottom: 0.5rem;
 }
 
 .action-card.primary .action-icon {
-  background: rgba(0, 74, 173, 0.2);
+  background: var(--primary-soft-strong);
 }
 
 .action-icon svg {
   width: 20px;
   height: 20px;
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .action-title {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .action-desc {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .horarios-list {
@@ -405,8 +347,8 @@ const diasActivos = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
@@ -418,12 +360,12 @@ const diasActivos = computed(() => {
 
 .curso-nombre {
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .horario-turno {
   font-size: 0.75rem;
-  color: #004aad;
+  color: var(--primary-text);
   text-transform: uppercase;
 }
 
@@ -436,45 +378,39 @@ const diasActivos = computed(() => {
 
 .horario-dia {
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
 }
 
 .horario-hora {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
+  .btn-logout {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
   }
 
-.btn-logout {
-  padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
+  .btn-logout:hover:not(:disabled) {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--text-2);
+  }
 
-.btn-logout:hover:not(:disabled) {
-  background: rgba(166, 166, 166, 0.15);
-  border-color: rgba(166, 166, 166, 0.3);
-  color: #d9d9d9;
-}
+  .btn-logout:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-.btn-logout:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.dashboard-content {
+  .dashboard-content {
     padding: 1rem;
   }
 
@@ -485,5 +421,9 @@ const diasActivos = computed(() => {
   .actions-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.panel-riesgo {
+  margin: 1.5rem 0;
 }
 </style>

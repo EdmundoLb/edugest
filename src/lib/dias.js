@@ -7,7 +7,7 @@ const ABREVIADO = {
   Jueves: 'Jue',
   Viernes: 'Vie',
   Sábado: 'Sáb',
-  Domingo: 'Dom'
+  Domingo: 'Dom',
 }
 
 function normalizar(dia) {
@@ -26,7 +26,7 @@ export function indiceDia(dia) {
 export function formatearDias(dias) {
   const indices = [...new Set(dias)]
     .map(indiceDia)
-    .filter(i => i !== -1)
+    .filter((i) => i !== -1)
     .sort((a, b) => a - b)
 
   const chips = []
@@ -37,9 +37,20 @@ export function formatearDias(dias) {
     chips.push(
       j > i
         ? `${ABREVIADO[DIAS_ORDEN[indices[i]]]}-${ABREVIADO[DIAS_ORDEN[indices[j]]]}`
-        : ABREVIADO[DIAS_ORDEN[indices[i]]]
+        : ABREVIADO[DIAS_ORDEN[indices[i]]],
     )
     i = j + 1
   }
   return chips
+}
+
+// Ordena horarios por día de la semana (Lunes primero) y hora de inicio.
+// Un .order('dia_semana') en la query ordena alfabéticamente (Jueves antes
+// que Lunes), por eso se ordena acá.
+export function ordenarPorDia(horarios) {
+  return [...horarios].sort(
+    (a, b) =>
+      indiceDia(a.dia_semana) - indiceDia(b.dia_semana) ||
+      (a.hora_inicio ?? '').localeCompare(b.hora_inicio ?? ''),
+  )
 }

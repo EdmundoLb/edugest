@@ -1,13 +1,15 @@
 <script setup>
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import Pagination from '@/components/Pagination.vue'
+import AppPagination from '@/components/AppPagination.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
 
-const router = useRouter()
+const toast = useToast()
+
 const { state, esAdmin } = useAuth()
 const loading = ref(true)
 const loadingEstudiantes = ref(false)
@@ -34,19 +36,13 @@ watch(cursoSeleccionado, async (nuevo) => {
 async function cargarCursos() {
   try {
     if (esAdmin()) {
-      const { data, error } = await supabase
-        .from('cursos')
-        .select('id, nombre')
-        .order('nombre')
+      const { data, error } = await supabase.from('cursos').select('id, nombre').order('nombre')
 
       if (error) throw error
       cursos.value = data || []
     } else {
-      const { data: profesor } = await supabase
-        .from('profesores')
-        .select('id')
-        .eq('perfil_id', state.perfil?.id)
-        .single()
+      // Fila de profesores del usuario logueado, ya cargada por el store de auth.
+      const profesor = state.datosUsuario
 
       if (profesor) {
         const { data, error } = await supabase
@@ -58,13 +54,13 @@ async function cargarCursos() {
 
         const vistos = new Set()
         cursos.value = (data || [])
-          .map(h => h.cursos)
-          .filter(c => c && !vistos.has(c.id) && vistos.add(c.id))
+          .map((h) => h.cursos)
+          .filter((c) => c && !vistos.has(c.id) && vistos.add(c.id))
           .sort((a, b) => a.nombre.localeCompare(b.nombre))
       }
     }
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar los cursos', e)
     cursos.value = []
   }
 }
@@ -76,29 +72,41 @@ async function cargarEstudiantes() {
   try {
     const { data, error } = await supabase
       .from('inscripciones')
-      .select('alumnos (id, nombre, apellido, telefono, created_at)')
+      .select('alumnos (id, ci, nombre, apellido, telefono, created_at)')
       .eq('curso_id', cursoSeleccionado.value.id)
 
     if (error) throw error
-    estudiantes.value = (data || []).map(i => i.alumnos).filter(Boolean)
-      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    estudiantes.value = (data || [])
+      .map((i) => i.alumnos)
+      .filter(Boolean)
+      .sort((a, b) => a.apellido.localeCompare(b.apellido) || a.nombre.localeCompare(b.nombre))
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar los alumnos', e)
     estudiantes.value = []
   } finally {
     loadingEstudiantes.value = false
   }
 }
 
-function verPerfil(id) {
-  router.push(`/Estudiantes/${id}`)
-}
+const busqueda = ref('')
 
-const totalPages = computed(() => Math.ceil(estudiantes.value.length / pageSize))
+watch(busqueda, () => {
+  currentPage.value = 1
+})
+
+const estudiantesFiltrados = computed(() => {
+  const q = busqueda.value.trim().toLowerCase()
+  if (!q) return estudiantes.value
+  return estudiantes.value.filter((e) =>
+    `${e.nombre} ${e.apellido} ${e.apellido} ${e.nombre} ${e.ci ?? ''}`.toLowerCase().includes(q),
+  )
+})
+
+const totalPages = computed(() => Math.ceil(estudiantesFiltrados.value.length / pageSize))
 
 const estudiantesPaginados = computed(() => {
   const start = (currentPage.value - 1) * pageSize
-  return estudiantes.value.slice(start, start + pageSize)
+  return estudiantesFiltrados.value.slice(start, start + pageSize)
 })
 
 function changePage(page) {
@@ -116,19 +124,16 @@ const currentState = computed(() => {
 
 <template>
   <div class="students-page">
-    <header class="page-header">
-      <div class="header-left">
-        <h1>Gestión de Alumnos</h1>
-        <span class="students-count">
-          {{ cursoSeleccionado ? `${estudiantes.length} alumnos en ${cursoSeleccionado.nombre}` : 'Elegí un curso' }}
-        </span>
-      </div>
-      <div class="header-right">
-        <span class="user-email">{{ state.user?.email }}</span>
-      </div>
-    </header>
+    <PageHeader
+      titulo="Alumnos"
+      :subtitulo="
+        cursoSeleccionado
+          ? `${estudiantes.length} alumnos en ${cursoSeleccionado.nombre}`
+          : 'Elegí un curso para ver sus alumnos'
+      "
+    />
 
-<main class="page-content">
+    <div class="page-content">
       <div class="filtros-section">
         <div class="filtro-group">
           <label for="curso">Curso</label>
@@ -137,16 +142,23 @@ const currentState = computed(() => {
             <option v-for="c in cursos" :key="c.id" :value="c">{{ c.nombre }}</option>
           </select>
         </div>
+        <div v-if="cursoSeleccionado" class="filtro-group">
+          <label for="buscar">Buscar</label>
+          <input id="buscar" v-model="busqueda" type="search" placeholder="Nombre, apellido o CI" />
+        </div>
       </div>
 
       <transition name="fade" mode="out-in">
         <div :key="currentState">
           <div v-if="loading || currentState === 'loading-estudiantes'" class="loading-state">
-            <Spinner size="large" />
+            <AppSpinner size="large" />
             <p>Cargando alumnos...</p>
           </div>
 
-          <EmptyState v-else-if="currentState === 'sin-curso'" title="Elegí un curso para ver sus alumnos">
+          <EmptyState
+            v-else-if="currentState === 'sin-curso'"
+            title="Elegí un curso para ver sus alumnos"
+          >
             <template #icon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -157,7 +169,10 @@ const currentState = computed(() => {
             </template>
           </EmptyState>
 
-          <EmptyState v-else-if="currentState === 'empty'" title="No hay alumnos inscriptos en este curso">
+          <EmptyState
+            v-else-if="currentState === 'empty'"
+            title="No hay alumnos inscriptos en este curso"
+          >
             <template #icon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -169,11 +184,11 @@ const currentState = computed(() => {
           </EmptyState>
 
           <div v-else class="students-grid">
-            <div
+            <router-link
               v-for="est in estudiantesPaginados"
               :key="est.id"
+              :to="`/Estudiantes/${est.id}`"
               class="student-card"
-              @click="verPerfil(est.id)"
             >
               <div class="student-avatar">
                 <div class="avatar-placeholder">
@@ -182,80 +197,51 @@ const currentState = computed(() => {
               </div>
               <div class="student-info">
                 <h3 class="student-name">{{ est.nombre }} {{ est.apellido }}</h3>
-                <p class="student-phone">{{ est.telefono || 'Sin teléfono' }}</p>
+                <p class="student-phone">CI {{ est.ci }} · {{ est.telefono || 'Sin teléfono' }}</p>
               </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-arrow">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="card-arrow"
+              >
                 <path d="M9 18l6-6-6-6" />
               </svg>
-            </div>
+            </router-link>
+            <p v-if="estudiantesPaginados.length === 0" class="sin-resultados">
+              Ningún alumno coincide con “{{ busqueda }}”.
+            </p>
           </div>
         </div>
       </transition>
 
-      <Pagination
+      <AppPagination
         v-if="totalPages > 1"
         :current-page="currentPage"
         :total-pages="totalPages"
         @page-change="changePage"
       />
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .students-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.page-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #ffffff;
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .students-count {
   font-size: 0.75rem;
-  color: #a6a6a6;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-email {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .btn-logout {
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-size: 0.8125rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -264,47 +250,46 @@ const currentState = computed(() => {
 
 .page-content {
   padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .filtros-section {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   margin-bottom: 1.5rem;
-  max-width: 320px;
+  max-width: 680px;
 }
 
 .filtro-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex: 1;
+  flex: 1 1 260px;
 }
 
 .filtro-group label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
 }
 
-.filtro-group select {
+.filtro-group select,
+.filtro-group input {
   padding: 0.75rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
   font-size: 0.9375rem;
   font-family: inherit;
-  color-scheme: dark;
 }
 
-.filtro-group select:focus {
+.filtro-group select:focus,
+.filtro-group input:focus {
   outline: none;
-  border-color: #004aad;
-}
-
-.filtro-group select option {
-  background: #022451;
-  color: #fff;
+  border-color: var(--primary);
 }
 
 .loading-state,
@@ -315,20 +300,22 @@ const currentState = computed(() => {
 }
 
 .student-card {
+  color: inherit;
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .student-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(0, 74, 173, 0.4);
+  background: var(--surface-2);
+  border-color: var(--primary-border);
   transform: translateY(-1px);
 }
 
@@ -346,7 +333,7 @@ const currentState = computed(() => {
   justify-content: center;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--on-primary);
 }
 
 .student-info {
@@ -357,7 +344,7 @@ const currentState = computed(() => {
 .student-name {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text);
   margin-bottom: 0.125rem;
   white-space: nowrap;
   overflow: hidden;
@@ -366,19 +353,21 @@ const currentState = computed(() => {
 
 .student-phone {
   font-size: 0.75rem;
-  color: #a6a6a6;
+  color: var(--text-muted);
 }
 
 .card-arrow {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-subtle);
   flex-shrink: 0;
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .fade-enter-from,
@@ -388,14 +377,14 @@ const currentState = computed(() => {
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
   .students-grid {
     grid-template-columns: 1fr;
   }
+}
+.sin-resultados {
+  grid-column: 1 / -1;
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
 }
 </style>

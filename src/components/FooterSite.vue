@@ -2,7 +2,7 @@
   <footer class="footer">
     <div class="footer-inner">
       <div class="footer-brand">
-        <img src="@/images/CCGLOGO.png" alt="Centro Cultural Gymmart" class="footer-logo" />
+        <img src="@/images/edugest-logo.png" alt="EduGest" class="footer-logo logo-edugest" />
         <span>Centro Cultural Gymmart</span>
       </div>
       <p class="footer-copy">&copy; 2026 Centro Cultural Gymmart. Todos los derechos reservados.</p>
@@ -12,7 +12,7 @@
 
 <style scoped>
 .footer {
-  background: #022451;
+  background: var(--surface);
   border-top: none;
 }
 
@@ -32,7 +32,7 @@
   gap: 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text);
 }
 
 .footer-logo {
@@ -43,7 +43,7 @@
 
 .footer-copy {
   font-size: 0.75rem;
-  color: #a6a6a6;
+  color: var(--text-muted);
   letter-spacing: 0.02em;
 }
 </style>

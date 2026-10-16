@@ -1,12 +1,16 @@
 <script setup>
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
+import { formatearFecha } from '@/lib/fecha'
+
+const toast = useToast()
 
 const route = useRoute()
-const router = useRouter()
 const { esAdmin } = useAuth()
 
 const loading = ref(true)
@@ -26,11 +30,7 @@ async function cargarEstudiante() {
   error.value = ''
   try {
     const id = route.params.id
-    const { data, error: err } = await supabase
-      .from('alumnos')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const { data, error: err } = await supabase.from('alumnos').select('*').eq('id', id).single()
 
     if (err) throw err
     estudiante.value = data
@@ -40,10 +40,6 @@ async function cargarEstudiante() {
   } finally {
     loading.value = false
   }
-}
-
-function volver() {
-  router.push('/Estudiantes')
 }
 
 function editarTelefonoPadre() {
@@ -64,8 +60,9 @@ async function guardarTelefonoPadre() {
 
     estudiante.value.telefono_padre = nuevoTelefono
     editandoTelefonoPadre.value = false
+    toast.exito('Teléfono del padre/tutor actualizado')
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudo guardar el teléfono', e)
   } finally {
     guardandoTelefonoPadre.value = false
   }
@@ -81,21 +78,13 @@ const currentState = computed(() => {
 
 <template>
   <div class="profile-page">
-    <header class="profile-header">
-      <button class="btn-back" @click="volver">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="back-icon">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        Volver
-      </button>
-      <h1>Perfil del Estudiante</h1>
-    </header>
+    <PageHeader titulo="Perfil del estudiante" volver="/Estudiantes" />
 
-    <main class="profile-content">
+    <div class="profile-content">
       <transition name="fade" mode="out-in">
         <div :key="currentState">
           <div v-if="loading" class="loading-state">
-            <Spinner size="medium" />
+            <AppSpinner size="medium" />
             <p>Cargando perfil...</p>
           </div>
 
@@ -104,162 +93,169 @@ const currentState = computed(() => {
           </div>
 
           <div v-else-if="estudiante" class="profile-card">
-          <div class="profile-avatar">
-            <div class="avatar-placeholder">
-              {{ estudiante.nombre?.charAt(0)?.toUpperCase() }}
+            <div class="profile-avatar">
+              <div class="avatar-placeholder">
+                {{ estudiante.nombre?.charAt(0)?.toUpperCase() }}
+              </div>
+            </div>
+
+            <div class="profile-name">
+              <h2>{{ estudiante.nombre }} {{ estudiante.apellido }}</h2>
+              <span class="ci-badge">CI: {{ estudiante.ci }}</span>
+            </div>
+
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Teléfono</label>
+                <div class="info-value">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="info-icon"
+                  >
+                    <path
+                      d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
+                    />
+                  </svg>
+                  <span>{{ estudiante.telefono || '—' }}</span>
+                </div>
+              </div>
+
+              <div class="info-item">
+                <label>Teléfono del padre/tutor</label>
+                <div v-if="!editandoTelefonoPadre" class="info-value">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="info-icon"
+                  >
+                    <path
+                      d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
+                    />
+                  </svg>
+                  <span>{{ estudiante.telefono_padre || '—' }}</span>
+                  <button
+                    v-if="esAdmin()"
+                    class="btn-editar-inline"
+                    @click="editarTelefonoPadre"
+                    title="Editar"
+                  >
+                    ✎
+                  </button>
+                </div>
+                <div v-else class="editar-telefono-padre">
+                  <input
+                    v-model="telefonoPadreInput"
+                    type="tel"
+                    placeholder="Ej: +591 70000000 (con código de país)"
+                    :disabled="guardandoTelefonoPadre"
+                  />
+                  <button
+                    class="btn-guardar-inline"
+                    @click="guardarTelefonoPadre"
+                    :disabled="guardandoTelefonoPadre"
+                  >
+                    {{ guardandoTelefonoPadre ? 'Guardando...' : 'Guardar' }}
+                  </button>
+                  <button
+                    class="btn-cancelar-inline"
+                    @click="editandoTelefonoPadre = false"
+                    :disabled="guardandoTelefonoPadre"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+
+              <div class="info-item">
+                <label>Fecha de Nacimiento</label>
+                <div class="info-value">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="info-icon"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span>{{
+                    estudiante.fecha_nacimiento
+                      ? formatearFecha(estudiante.fecha_nacimiento, {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })
+                      : '—'
+                  }}</span>
+                </div>
+              </div>
+
+              <div class="info-item">
+                <label>Dirección</label>
+                <div class="info-value">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="info-icon"
+                  >
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <span>{{ estudiante.direccion || '—' }}</span>
+                </div>
+              </div>
+
+              <div class="info-item full-width">
+                <label>Historial Académico</label>
+                <div class="info-value">
+                  <span>{{
+                    estudiante.historial_academico || 'Sin historial académico registrado'
+                  }}</span>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div class="profile-name">
-            <h2>{{ estudiante.nombre }} {{ estudiante.apellido }}</h2>
-            <span class="ci-badge">CI: {{ estudiante.ci }}</span>
-          </div>
-
-          <div class="info-grid">
-            <div class="info-item">
-              <label>Teléfono</label>
-              <div class="info-value">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
-                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
-                </svg>
-                <span>{{ estudiante.telefono || '—' }}</span>
-              </div>
-            </div>
-
-            <div class="info-item">
-              <label>Teléfono del padre/tutor</label>
-              <div v-if="!editandoTelefonoPadre" class="info-value">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
-                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
-                </svg>
-                <span>{{ estudiante.telefono_padre || '—' }}</span>
-                <button v-if="esAdmin()" class="btn-editar-inline" @click="editarTelefonoPadre" title="Editar">
-                  ✎
-                </button>
-              </div>
-              <div v-else class="editar-telefono-padre">
-                <input
-                  v-model="telefonoPadreInput"
-                  type="tel"
-                  placeholder="Ej: +591 70000000 (con código de país)"
-                  :disabled="guardandoTelefonoPadre"
-                />
-                <button class="btn-guardar-inline" @click="guardarTelefonoPadre" :disabled="guardandoTelefonoPadre">
-                  {{ guardandoTelefonoPadre ? 'Guardando...' : 'Guardar' }}
-                </button>
-                <button class="btn-cancelar-inline" @click="editandoTelefonoPadre = false" :disabled="guardandoTelefonoPadre">
-                  Cancelar
-                </button>
-              </div>
-            </div>
-
-            <div class="info-item">
-              <label>Fecha de Nacimiento</label>
-              <div class="info-value">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span>{{ estudiante.fecha_nacimiento || '—' }}</span>
-              </div>
-            </div>
-
-            <div class="info-item">
-              <label>Dirección</label>
-              <div class="info-value">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-                <span>{{ estudiante.direccion || '—' }}</span>
-              </div>
-            </div>
-
-            <div class="info-item full-width">
-              <label>Historial Académico</label>
-              <div class="info-value">
-                <span>{{ estudiante.historial_academico || 'Sin historial académico registrado' }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
         </div>
       </transition>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .profile-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.profile-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.profile-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.btn-back:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.back-icon {
-  width: 16px;
-  height: 16px;
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .profile-content {
   padding: 2rem;
   display: flex;
   justify-content: center;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .loading-state,
 .error-state {
   text-align: center;
   padding: 3rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
-
 
 .profile-card {
   width: 100%;
   max-width: 480px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 2.5rem 2rem;
   display: flex;
@@ -282,7 +278,7 @@ const currentState = computed(() => {
   justify-content: center;
   font-size: 2rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .profile-name {
@@ -298,11 +294,11 @@ const currentState = computed(() => {
 .ci-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: rgba(0, 74, 173, 0.1);
-  border: 1px solid rgba(0, 74, 173, 0.2);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-border);
   border-radius: 999px;
   font-size: 0.8125rem;
-  color: #004aad;
+  color: var(--primary-text);
   font-weight: 500;
 }
 
@@ -327,7 +323,7 @@ const currentState = computed(() => {
 .info-item label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #a6a6a6;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -337,17 +333,17 @@ const currentState = computed(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 0.9375rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text);
 }
 
 .info-icon {
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-subtle);
   flex-shrink: 0;
 }
 
@@ -355,7 +351,7 @@ const currentState = computed(() => {
   margin-left: auto;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   cursor: pointer;
   font-size: 0.9375rem;
   padding: 0.125rem 0.375rem;
@@ -363,7 +359,7 @@ const currentState = computed(() => {
 }
 
 .btn-editar-inline:hover {
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .editar-telefono-padre {
@@ -376,18 +372,17 @@ const currentState = computed(() => {
   flex: 1;
   min-width: 160px;
   padding: 0.75rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.9375rem;
   font-family: inherit;
-  color-scheme: dark;
 }
 
 .editar-telefono-padre input:focus {
   outline: none;
-  border-color: #004aad;
+  border-color: var(--primary);
 }
 
 .btn-guardar-inline,
@@ -402,23 +397,23 @@ const currentState = computed(() => {
 }
 
 .btn-guardar-inline {
-  background: #004aad;
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   border: none;
 }
 
 .btn-guardar-inline:hover:not(:disabled) {
-  background: #003380;
+  background: var(--primary-hover);
 }
 
 .btn-cancelar-inline {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.7);
+  border-color: var(--border-strong);
+  color: var(--text-2);
 }
 
 .btn-cancelar-inline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-2);
 }
 
 .btn-guardar-inline:disabled,
@@ -429,7 +424,9 @@ const currentState = computed(() => {
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .fade-enter-from,

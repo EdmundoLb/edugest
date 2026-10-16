@@ -66,3 +66,22 @@ export function armarMensajeGrupoAsistencia({ curso, fecha, ausentes, justificad
 
   return mensaje
 }
+
+export function armarMensajeAlerta({ alumno, curso, porcentaje, faltasSeguidas }) {
+  let mensaje =
+    `Hola, nos comunicamos del Centro Cultural Gymmart por la asistencia de ` +
+    `${alumno.nombre} ${alumno.apellido} en ${curso}.`
+
+  if (faltasSeguidas >= 2) {
+    mensaje += ` Registra ${faltasSeguidas} faltas seguidas sin justificar.`
+  }
+  if (porcentaje !== null && porcentaje !== undefined) {
+    mensaje += ` Su asistencia en el último período es del ${Math.round(porcentaje)}%.`
+  }
+
+  mensaje +=
+    ' Le pedimos que se comunique con la institución para conversar sobre la situación.' +
+    '\n\n— Centro Cultural Gymmart'
+
+  return mensaje
+}

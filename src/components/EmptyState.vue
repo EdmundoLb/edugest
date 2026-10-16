@@ -20,12 +20,12 @@
 defineProps({
   title: {
     type: String,
-    required: true
+    required: true,
   },
   hint: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 </script>
 
@@ -33,7 +33,7 @@ defineProps({
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .empty-icon {
@@ -43,20 +43,20 @@ defineProps({
 .empty-icon :deep(svg) {
   width: 48px;
   height: 48px;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-subtle);
 }
 
 .empty-title {
   font-size: 1rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-2);
   margin: 0;
 }
 
 .empty-hint {
   display: block;
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-subtle);
   margin-top: 0.5rem;
 }
 

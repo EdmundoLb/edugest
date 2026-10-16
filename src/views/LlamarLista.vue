@@ -1,216 +1,265 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import PageHeader from '@/components/PageHeader.vue'
+import AlumnoAsistenciaFila from '@/components/AlumnoAsistenciaFila.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import { hoyLocal, diaSemanaDeFecha, formatearFecha } from '@/lib/fecha'
-import { formatearDias, indiceDia } from '@/lib/dias'
-import Spinner from '@/components/Spinner.vue'
+import { hoyLocal, diaSemanaDeFecha, formatearFecha, formatearHora } from '@/lib/fecha'
+import { formatearDias, indiceDia, ordenarPorDia } from '@/lib/dias'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 
-const router = useRouter()
 const route = useRoute()
 const { state } = useAuth()
+const toast = useToast()
+const confirmar = useConfirm()
 
 const loading = ref(true)
 const loadingAlumnos = ref(false)
 const guardando = ref(false)
-const mensaje = ref('')
-const tipoMensaje = ref('success')
-const asistenciaPreviaExiste = ref(false)
-const confirmandoSobrescritura = ref(false)
-const informeRemitido = ref(null)
 const remitiendo = ref(false)
 
 const horarios = ref([])
-const profesorId = ref(null)
-const cursoSeleccionado = ref(null)
+const cursoId = ref(null)
+const fecha = ref(hoyLocal())
 const alumnos = ref([])
-const fechaSeleccionada = ref(hoyLocal())
 const asistencia = ref({})
 const observaciones = ref({})
+const asistenciaGuardada = ref(false)
+const informeRemitido = ref(null)
+const busqueda = ref('')
+
+// Foto de lo último cargado/guardado, para saber si hay cambios sin guardar.
+const snapshot = ref('')
+
+const profesorId = computed(() => state.datosUsuario?.id ?? null)
 
 const cursos = computed(() => {
   const vistos = new Set()
   return horarios.value
-    .map(h => h.cursos)
-    .filter(c => c && !vistos.has(c.id) && vistos.add(c.id))
+    .map((h) => h.cursos)
+    .filter((c) => c && !vistos.has(c.id) && vistos.add(c.id))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 })
 
+const cursoSeleccionado = computed(() => cursos.value.find((c) => c.id === cursoId.value) ?? null)
+
+const horariosDelCurso = computed(() =>
+  horarios.value.filter((h) => h.cursos?.id === cursoId.value),
+)
+
 const horarioDelDia = computed(() => {
-  if (!cursoSeleccionado.value) return null
-  const indice = indiceDia(diaSemanaDeFecha(fechaSeleccionada.value))
-  return horarios.value.find(
-    h => h.cursos?.id === cursoSeleccionado.value.id && indiceDia(h.dia_semana) === indice
-  ) || null
+  if (!cursoId.value) return null
+  const indice = indiceDia(diaSemanaDeFecha(fecha.value))
+  return horariosDelCurso.value.find((h) => indiceDia(h.dia_semana) === indice) ?? null
 })
 
-const diasDelCurso = computed(() => {
-  if (!cursoSeleccionado.value) return []
-  return formatearDias(
-    horarios.value.filter(h => h.cursos?.id === cursoSeleccionado.value.id).map(h => h.dia_semana)
-  )
+const diasDelCurso = computed(() => formatearDias(horariosDelCurso.value.map((h) => h.dia_semana)))
+
+function estadoActual() {
+  return JSON.stringify({ a: asistencia.value, o: observaciones.value })
+}
+
+// Cambios hechos por el usuario desde la última carga/guardado (para avisar
+// antes de perderlos).
+const hayCambios = computed(() => alumnos.value.length > 0 && estadoActual() !== snapshot.value)
+// Una lista nueva (todos presentes por defecto) también falta guardarla,
+// aunque el usuario no haya tocado nada.
+const faltaGuardar = computed(
+  () => hayCambios.value || (alumnos.value.length > 0 && !asistenciaGuardada.value),
+)
+
+const alumnosFiltrados = computed(() => {
+  const q = busqueda.value.trim().toLowerCase()
+  if (!q) return alumnos.value
+  return alumnos.value.filter((a) => `${a.nombre} ${a.apellido}`.toLowerCase().includes(q))
+})
+
+const totales = computed(() => {
+  const t = { presente: 0, ausente: 0, justificado: 0 }
+  alumnos.value.forEach((a) => t[asistencia.value[a.id]]++)
+  return t
 })
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', avisarAlCerrar)
   await cargarHorarios()
 
-  let cursoId = route.query.curso
-  if (!cursoId && route.query.horario) {
-    const h = horarios.value.find(horario => horario.id === route.query.horario)
-    cursoId = h?.cursos?.id
+  let id = route.query.curso
+  if (!id && route.query.horario) {
+    id = horarios.value.find((h) => h.id === route.query.horario)?.cursos?.id
   }
-  if (cursoId) {
-    const c = cursos.value.find(curso => curso.id === cursoId)
-    if (c) cursoSeleccionado.value = c
+  if (id && cursos.value.some((c) => c.id === id)) {
+    cursoId.value = id
+  } else if (cursos.value.length === 1) {
+    cursoId.value = cursos.value[0].id
   }
 })
 
-watch([cursoSeleccionado, fechaSeleccionada], async ([curso]) => {
-  if (curso) {
-    await cargarAlumnos()
-  } else {
-    alumnos.value = []
-  }
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', avisarAlCerrar)
 })
+
+function avisarAlCerrar(e) {
+  if (hayCambios.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+async function confirmarDescartar() {
+  if (!hayCambios.value) return true
+  return confirmar({
+    titulo: '¿Descartar los cambios?',
+    mensaje: 'Hay asistencia marcada que todavía no guardaste. Si seguís, se pierde.',
+    aceptar: 'Descartar cambios',
+    cancelar: 'Seguir editando',
+    peligro: true,
+  })
+}
+
+onBeforeRouteLeave(confirmarDescartar)
+
+// El <select> y el <input type="date"> no usan v-model directo: primero se
+// pregunta si descartar cambios, y si el usuario cancela se vuelve el control
+// a su valor anterior.
+async function cambiarCurso(e) {
+  const nuevo = e.target.value
+  if (await confirmarDescartar()) {
+    cursoId.value = nuevo
+  } else {
+    e.target.value = cursoId.value ?? ''
+  }
+}
+
+async function cambiarFecha(e) {
+  const nueva = e.target.value
+  if (!nueva) {
+    e.target.value = fecha.value
+    return
+  }
+  if (await confirmarDescartar()) {
+    fecha.value = nueva
+  } else {
+    e.target.value = fecha.value
+  }
+}
+
+async function irAHoy() {
+  if (fecha.value !== hoyLocal() && (await confirmarDescartar())) {
+    fecha.value = hoyLocal()
+  }
+}
+
+watch([cursoId, fecha], cargarAlumnos)
 
 async function cargarHorarios() {
   loading.value = true
   try {
-    const { data: profesor } = await supabase
-      .from('profesores')
-      .select('id')
-      .eq('perfil_id', state.perfil?.id)
-      .single()
-
-    if (profesor) {
-      profesorId.value = profesor.id
-
-      const { data, error } = await supabase
-        .from('horarios')
-        .select(`
-          id,
-          dia_semana,
-          hora_inicio,
-          hora_fin,
-          turno,
-          cursos (id, nombre)
-        `)
-        .eq('profesor_id', profesor.id)
-        .order('dia_semana')
-
-      if (!error) {
-        horarios.value = data || []
-      }
-    }
+    if (!profesorId.value) return
+    const { data, error } = await supabase
+      .from('horarios')
+      .select('id, dia_semana, hora_inicio, hora_fin, turno, cursos (id, nombre)')
+      .eq('profesor_id', profesorId.value)
+    if (error) throw error
+    horarios.value = ordenarPorDia(data || [])
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar tus horarios', e)
   } finally {
     loading.value = false
   }
 }
 
 async function cargarAlumnos() {
-  if (!cursoSeleccionado.value) return
-
-  loadingAlumnos.value = true
   alumnos.value = []
   asistencia.value = {}
   observaciones.value = {}
   informeRemitido.value = null
+  asistenciaGuardada.value = false
+  busqueda.value = ''
+  snapshot.value = estadoActual()
 
+  const horario = horarioDelDia.value
+  if (!horario) return
+
+  loadingAlumnos.value = true
   try {
-    const horario = horarioDelDia.value
-    if (!horario) return
-
-    const { data: informe } = await supabase
-      .from('informes_asistencia')
-      .select('*')
-      .eq('horario_id', horario.id)
-      .eq('fecha', fechaSeleccionada.value)
-      .maybeSingle()
-
-    informeRemitido.value = informe
-
-    const { data, error } = await supabase
-      .from('inscripciones')
-      .select('alumnos (id, nombre, apellido, perfil_id)')
-      .eq('curso_id', cursoSeleccionado.value.id)
-
-    if (error) throw error
-
-    alumnos.value = (data || []).map((i) => i.alumnos).filter(Boolean)
-
-    if (alumnos.value.length > 0) {
-      const { data: asistenciaExistente } = await supabase
+    const [inscripciones, existente, informe] = await Promise.all([
+      supabase
+        .from('inscripciones')
+        .select('alumnos (id, nombre, apellido)')
+        .eq('curso_id', cursoId.value),
+      supabase
         .from('asistencia')
+        .select('alumno_id, estado, observacion')
+        .eq('horario_id', horario.id)
+        .eq('fecha', fecha.value),
+      supabase
+        .from('informes_asistencia')
         .select('*')
         .eq('horario_id', horario.id)
-        .eq('fecha', fechaSeleccionada.value)
+        .eq('fecha', fecha.value)
+        .maybeSingle(),
+    ])
+    if (inscripciones.error) throw inscripciones.error
+    if (existente.error) throw existente.error
 
-      asistenciaPreviaExiste.value = asistenciaExistente && asistenciaExistente.length > 0
+    alumnos.value = (inscripciones.data || [])
+      .map((i) => i.alumnos)
+      .filter(Boolean)
+      .sort((a, b) => a.apellido.localeCompare(b.apellido) || a.nombre.localeCompare(b.nombre))
 
-      if (asistenciaExistente && asistenciaExistente.length > 0) {
-        asistenciaExistente.forEach(a => {
-          asistencia.value[a.alumno_id] = a.estado
-          observaciones.value[a.alumno_id] = a.observacion || ''
-        })
-      } else {
-        alumnos.value.forEach(a => {
-          asistencia.value[a.id] = 'presente'
-          observaciones.value[a.id] = ''
-        })
-      }
-    }
+    const previos = new Map((existente.data || []).map((r) => [r.alumno_id, r]))
+    asistenciaGuardada.value = previos.size > 0
+
+    const nuevaAsistencia = {}
+    const nuevasObservaciones = {}
+    alumnos.value.forEach((a) => {
+      // Primera pasada de lista: todos presentes por defecto.
+      nuevaAsistencia[a.id] = previos.get(a.id)?.estado ?? 'presente'
+      nuevasObservaciones[a.id] = previos.get(a.id)?.observacion ?? ''
+    })
+    asistencia.value = nuevaAsistencia
+    observaciones.value = nuevasObservaciones
+    informeRemitido.value = informe.data ?? null
+
+    snapshot.value = estadoActual()
   } catch (e) {
-    console.error(e)
-    mensaje.value = 'Error al cargar alumnos'
-    tipoMensaje.value = 'error'
+    toast.error('No se pudieron cargar los alumnos', e)
   } finally {
     loadingAlumnos.value = false
   }
 }
 
 async function guardarAsistencia() {
-  if (!cursoSeleccionado.value || !horarioDelDia.value || alumnos.value.length === 0) return
-
-  if (asistenciaPreviaExiste.value && !confirmandoSobrescritura.value) {
-    confirmandoSobrescritura.value = true
-    return
-  }
+  if (!horarioDelDia.value || alumnos.value.length === 0) return
 
   guardando.value = true
-  mensaje.value = ''
-  confirmandoSobrescritura.value = false
-
   try {
-    const asistenciaRecords = alumnos.value.map(alumno => ({
+    const registros = alumnos.value.map((alumno) => ({
       horario_id: horarioDelDia.value.id,
       alumno_id: alumno.id,
-      fecha: fechaSeleccionada.value,
+      fecha: fecha.value,
       estado: asistencia.value[alumno.id] || 'presente',
-      observacion: observaciones.value[alumno.id] || null
+      observacion: observaciones.value[alumno.id]?.trim() || null,
     }))
 
     const { error } = await supabase
       .from('asistencia')
-      .upsert(asistenciaRecords, {
-        onConflict: 'horario_id,alumno_id,fecha'
-      })
-
+      .upsert(registros, { onConflict: 'horario_id,alumno_id,fecha' })
     if (error) throw error
 
-    mensaje.value = 'Asistencia guardada correctamente'
-    tipoMensaje.value = 'success'
-    asistenciaPreviaExiste.value = true
-
-    setTimeout(() => {
-      mensaje.value = ''
-    }, 3000)
+    asistenciaGuardada.value = true
+    snapshot.value = estadoActual()
+    toast.exito(
+      informeRemitido.value
+        ? 'Asistencia actualizada. Volvé a remitir el informe para que administración vea los cambios.'
+        : 'Asistencia guardada',
+    )
   } catch (e) {
-    console.error(e)
-    mensaje.value = 'Error al guardar asistencia'
-    tipoMensaje.value = 'error'
+    toast.error('No se pudo guardar la asistencia', e)
   } finally {
     guardando.value = false
   }
@@ -226,534 +275,361 @@ async function remitirInforme() {
       .upsert(
         {
           horario_id: horarioDelDia.value.id,
-          fecha: fechaSeleccionada.value,
+          fecha: fecha.value,
           profesor_id: profesorId.value,
           estado: 'pendiente',
           creado_at: new Date().toISOString(),
         },
-        { onConflict: 'horario_id,fecha' }
+        { onConflict: 'horario_id,fecha' },
       )
       .select()
       .single()
-
     if (error) throw error
 
     informeRemitido.value = data
+    toast.exito('Informe remitido a administración')
   } catch (e) {
-    console.error(e)
-    mensaje.value = 'Error al remitir el informe'
-    tipoMensaje.value = 'error'
+    toast.error('No se pudo remitir el informe', e)
   } finally {
     remitiendo.value = false
   }
 }
 
 function marcarTodos(estado) {
-  alumnos.value.forEach(a => {
+  alumnos.value.forEach((a) => {
     asistencia.value[a.id] = estado
   })
 }
-
-const todosPresentes = computed(() => {
-  if (alumnos.value.length === 0) return false
-  return alumnos.value.every(a => asistencia.value[a.id] === 'presente')
-})
-
-const todosAusentes = computed(() => {
-  if (alumnos.value.length === 0) return false
-  return alumnos.value.every(a => asistencia.value[a.id] === 'ausente')
-})
-
-const totalPresentes = computed(() => {
-  return alumnos.value.filter(a => asistencia.value[a.id] === 'presente').length
-})
-
-const totalAusentes = computed(() => {
-  return alumnos.value.filter(a => asistencia.value[a.id] === 'ausente').length
-})
-
-const totalJustificados = computed(() => {
-  return alumnos.value.filter(a => asistencia.value[a.id] === 'justificado').length
-})
 </script>
 
 <template>
   <div class="lista-page">
-    <header class="page-header">
-      <div class="header-left">
-        <button class="btn-back" @click="router.push('/MisCursos')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="back-icon">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1>Llamar Lista</h1>
-      </div>
-      <router-link to="/ProfesorDashboard" class="btn-volver">
-        ← Volver al panel
-      </router-link>
-    </header>
+    <PageHeader
+      titulo="Llamar lista"
+      subtitulo="Registrá la asistencia del día"
+      volver="/ProfesorDashboard"
+    />
 
-    <main class="page-content">
-      <div v-if="loading" class="loading-state">
-        <Spinner size="large" />
-        <p>Cargando...</p>
+    <div class="page-content">
+      <div v-if="loading" class="estado-carga">
+        <AppSpinner size="large" />
+        <p>Cargando tus cursos...</p>
       </div>
 
-      <div v-else class="lista-content">
-        <div class="filtros-section">
-          <div class="filtro-group">
+      <div v-else-if="cursos.length === 0" class="aviso">
+        <p>No tenés cursos asignados todavía.</p>
+        <span>Pedile a administración que te asigne un horario.</span>
+      </div>
+
+      <template v-else>
+        <section class="filtros" aria-label="Curso y fecha">
+          <div class="campo">
             <label for="curso">Curso</label>
             <select
               id="curso"
-              v-model="cursoSeleccionado"
-              :disabled="loadingAlumnos"
+              :value="cursoId ?? ''"
+              :disabled="loadingAlumnos || guardando"
+              @change="cambiarCurso"
             >
-              <option :value="null" disabled>Selecciona un curso</option>
-              <option v-for="c in cursos" :key="c.id" :value="c">
-                {{ c.nombre }}
-              </option>
+              <option value="" disabled>Elegí un curso</option>
+              <option v-for="c in cursos" :key="c.id" :value="c.id">{{ c.nombre }}</option>
             </select>
           </div>
 
-          <div class="filtro-group">
+          <div class="campo">
             <label for="fecha">Fecha</label>
-            <input
-              id="fecha"
-              type="date"
-              v-model="fechaSeleccionada"
-              :disabled="loadingAlumnos"
-            />
+            <div class="fecha-fila">
+              <input
+                id="fecha"
+                type="date"
+                :value="fecha"
+                :max="hoyLocal()"
+                :disabled="loadingAlumnos || guardando"
+                @change="cambiarFecha"
+              />
+              <button
+                type="button"
+                class="btn-hoy"
+                :disabled="fecha === hoyLocal()"
+                @click="irAHoy"
+              >
+                Hoy
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
 
         <p v-if="cursoSeleccionado" class="curso-info">
-          Este curso tiene clase:
+          <span>Días de clase:</span>
           <span v-for="chip in diasDelCurso" :key="chip" class="dia-chip">{{ chip }}</span>
+          <span v-if="horarioDelDia" class="hora">
+            · {{ formatearHora(horarioDelDia.hora_inicio) }}–{{
+              formatearHora(horarioDelDia.hora_fin)
+            }}
+          </span>
         </p>
 
-        <div v-if="mensaje" :class="['mensaje', tipoMensaje]">
-          {{ mensaje }}
+        <div v-if="!cursoSeleccionado" class="aviso">
+          <p>Elegí un curso para empezar.</p>
         </div>
 
-        <div v-if="confirmandoSobrescritura" class="confirmacion-box">
-          <p>Ya existe asistencia registrada para esta fecha. ¿Deseas sobrescribirla?</p>
-          <div class="confirmacion-acciones">
-            <button class="btn-confirmar" @click="guardarAsistencia" :disabled="guardando">
-              Sí, sobrescribir
-            </button>
-            <button class="btn-cancelar" @click="confirmandoSobrescritura = false">
-              Cancelar
-            </button>
-          </div>
+        <div v-else-if="loadingAlumnos" class="estado-carga">
+          <AppSpinner size="large" />
+          <p>Cargando alumnos...</p>
         </div>
 
-        <div v-if="cursoSeleccionado && !horarioDelDia && !loadingAlumnos" class="sin-clase-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="sin-clase-icon">
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <path d="M16 2v4M8 2v4M3 10h18" />
-            <path d="M9 16l6-6M9 10l6 6" />
-          </svg>
+        <div v-else-if="!horarioDelDia" class="aviso">
           <p>
             {{ cursoSeleccionado.nombre }} no tiene clase el
-            {{ formatearFecha(fechaSeleccionada, { weekday: 'long', day: 'numeric', month: 'long' }) }}.
+            {{ formatearFecha(fecha, { weekday: 'long', day: 'numeric', month: 'long' }) }}.
           </p>
-          <span class="sin-clase-hint">Días de clase: {{ diasDelCurso.join(', ') }}</span>
+          <span>Elegí otra fecha. Días de clase: {{ diasDelCurso.join(', ') }}</span>
         </div>
 
-        <div v-if="cursoSeleccionado && horarioDelDia && !loadingAlumnos" class="alumnos-section">
-          <div class="alumnos-header">
-            <div class="alumnos-stats">
-              <span>{{ alumnos.length }} alumnos</span>
-              <span class="stat-divider">|</span>
-              <span class="stat-presente">{{ totalPresentes }} presentes</span>
-              <span class="stat-divider">|</span>
-              <span class="stat-ausente">{{ totalAusentes }} ausentes</span>
-              <span class="stat-divider">|</span>
-              <span class="stat-justificado">{{ totalJustificados }} justificados</span>
-            </div>
+        <div v-else-if="alumnos.length === 0" class="aviso">
+          <p>Este curso no tiene alumnos inscriptos.</p>
+        </div>
 
-            <div class="acciones-rapidas" v-if="alumnos.length > 0">
-              <button
-                class="btn-todos btn-presente"
-                @click="marcarTodos('presente')"
-                :disabled="todosPresentes"
+        <template v-else>
+          <section class="resumen" aria-label="Resumen">
+            <div class="contadores" aria-live="polite">
+              <span class="contador"
+                ><strong>{{ alumnos.length }}</strong> alumnos</span
               >
+              <span class="contador presente"
+                ><strong>{{ totales.presente }}</strong> presentes</span
+              >
+              <span class="contador ausente"
+                ><strong>{{ totales.ausente }}</strong> ausentes</span
+              >
+              <span class="contador justificado"
+                ><strong>{{ totales.justificado }}</strong> justificados</span
+              >
+            </div>
+            <div class="acciones-rapidas">
+              <button type="button" class="btn-chico" @click="marcarTodos('presente')">
                 Todos presentes
               </button>
-              <button
-                class="btn-todos btn-ausente"
-                @click="marcarTodos('ausente')"
-                :disabled="todosAusentes"
-              >
+              <button type="button" class="btn-chico" @click="marcarTodos('ausente')">
                 Todos ausentes
               </button>
             </div>
+          </section>
+
+          <input
+            v-if="alumnos.length > 8"
+            v-model="busqueda"
+            type="search"
+            class="buscador"
+            placeholder="Buscar alumno..."
+            aria-label="Buscar alumno"
+          />
+
+          <div class="lista">
+            <AlumnoAsistenciaFila
+              v-for="alumno in alumnosFiltrados"
+              :key="alumno.id"
+              v-model:estado="asistencia[alumno.id]"
+              v-model:observacion="observaciones[alumno.id]"
+              :alumno="alumno"
+              :deshabilitado="guardando"
+            />
+            <p v-if="alumnosFiltrados.length === 0" class="sin-resultados">
+              Ningún alumno coincide con “{{ busqueda }}”.
+            </p>
           </div>
 
-          <div v-if="alumnos.length === 0" class="empty-alumnos">
-            <p>No hay alumnos registrados en este curso</p>
-          </div>
-
-          <div v-else class="alumnos-list">
-            <div v-for="alumno in alumnos" :key="alumno.id" class="alumno-card">
-              <div class="alumno-info">
-                <div class="alumno-avatar">
-                  {{ alumno.nombre?.charAt(0)?.toUpperCase() }}
-                </div>
-                <div class="alumno-nombre">
-                  <span class="nombre">{{ alumno.nombre }} {{ alumno.apellido }}</span>
-                </div>
-              </div>
-
-              <div class="asistencia-opciones">
-                <label class="opcion presente" :class="{ active: asistencia[alumno.id] === 'presente' }">
-                  <input
-                    type="radio"
-                    :name="`asistencia-${alumno.id}`"
-                    :checked="asistencia[alumno.id] === 'presente'"
-                    @change="asistencia[alumno.id] = 'presente'"
-                  />
-                  <span class="opcion-texto">Presente</span>
-                </label>
-
-                <label class="opcion ausente" :class="{ active: asistencia[alumno.id] === 'ausente' }">
-                  <input
-                    type="radio"
-                    :name="`asistencia-${alumno.id}`"
-                    :checked="asistencia[alumno.id] === 'ausente'"
-                    @change="asistencia[alumno.id] = 'ausente'"
-                  />
-                  <span class="opcion-texto">Ausente</span>
-                </label>
-
-                <label class="opcion justificado" :class="{ active: asistencia[alumno.id] === 'justificado' }">
-                  <input
-                    type="radio"
-                    :name="`asistencia-${alumno.id}`"
-                    :checked="asistencia[alumno.id] === 'justificado'"
-                    @change="asistencia[alumno.id] = 'justificado'"
-                  />
-                  <span class="opcion-texto">Justificado</span>
-                </label>
-              </div>
-
-              <div class="observacion-group">
-                <input
-                  type="text"
-                  v-model="observaciones[alumno.id]"
-                  placeholder="Observación (opcional)"
-                  class="observacion-input"
-                />
-              </div>
+          <div class="barra-guardar">
+            <div class="barra-estado">
+              <span v-if="faltaGuardar" class="pendiente">● Sin guardar</span>
+              <span v-else-if="informeRemitido" class="ok">
+                ✓ Guardada y remitida a administración
+              </span>
+              <span v-else class="ok">✓ Asistencia guardada</span>
+            </div>
+            <div class="barra-acciones">
+              <button
+                v-if="!faltaGuardar"
+                type="button"
+                class="btn-secundario"
+                :disabled="remitiendo"
+                @click="remitirInforme"
+              >
+                <AppSpinner v-if="remitiendo" size="small" />
+                {{ informeRemitido ? 'Volver a remitir' : 'Remitir a administración' }}
+              </button>
+              <button
+                type="button"
+                class="btn-primario"
+                :disabled="guardando || !faltaGuardar"
+                @click="guardarAsistencia"
+              >
+                <AppSpinner v-if="guardando" size="small" variant="light" />
+                {{ guardando ? 'Guardando...' : 'Guardar asistencia' }}
+              </button>
             </div>
           </div>
-
-          <div class="guardar-section" v-if="alumnos.length > 0">
-            <button
-              class="btn-guardar"
-              @click="guardarAsistencia"
-              :disabled="guardando"
-            >
-              <Spinner v-if="guardando" size="small" variant="light" />
-              {{ guardando ? 'Guardando...' : 'Guardar Asistencia' }}
-            </button>
-          </div>
-
-          <div class="informe-section" v-if="asistenciaPreviaExiste">
-            <p v-if="informeRemitido" class="informe-estado informe-ok">
-              Informe remitido a administración el
-              {{ formatearFecha(informeRemitido.creado_at.slice(0, 10), { day: 'numeric', month: 'long' }) }}.
-              Ya puede enviarse a los padres.
-            </p>
-            <button class="btn-remitir" @click="remitirInforme" :disabled="remitiendo">
-              <Spinner v-if="remitiendo" size="small" variant="light" />
-              {{ remitiendo ? 'Remitiendo...' : informeRemitido ? 'Volver a remitir' : 'Remitir informe a administración' }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="loadingAlumnos" class="loading-alumnos">
-          <Spinner size="large" />
-          <p>Cargando alumnos...</p>
-        </div>
-      </div>
-    </main>
+        </template>
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .lista-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.page-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-back:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.back-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.btn-volver {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.btn-volver:hover {
-  color: #fff;
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .page-content {
-  padding: 2rem;
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
+  padding: 1.5rem 1.5rem 0;
 }
 
-.loading-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.filtros-section {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.filtro-group {
+.estado-carga {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
+  align-items: center;
+  gap: 1rem;
+  padding: 4rem 1rem;
+  color: var(--text-muted);
 }
 
-.filtro-group label {
+.aviso {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-2);
+}
+
+.aviso span {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.filtros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.campo label {
   font-size: 0.8125rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  color: var(--text-2);
 }
 
-.filtro-group select,
-.filtro-group input {
-  padding: 0.75rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+.campo select,
+.campo input,
+.buscador {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.9375rem;
-  font-family: inherit;
-  color-scheme: dark;
 }
 
-.filtro-group select:focus,
-.filtro-group input:focus {
+.campo select:focus,
+.campo input:focus,
+.buscador:focus {
   outline: none;
-  border-color: #004aad;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
 }
 
-.filtro-group select option {
-  background: #022451;
-  color: #fff;
+.fecha-fila {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-hoy {
+  flex-shrink: 0;
+  padding: 0 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-hoy:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .curso-info {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.375rem;
+  margin-bottom: 1.25rem;
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 1.5rem;
+  color: var(--text-muted);
 }
 
 .dia-chip {
-  padding: 0.25rem 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.sin-clase-box {
-  text-align: center;
-  padding: 3rem;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  margin-bottom: 1.5rem;
-}
-
-.sin-clase-icon {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 1rem;
-  color: rgba(255, 255, 255, 0.2);
-}
-
-.sin-clase-box p {
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 0.5rem;
-}
-
-.sin-clase-hint {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.mensaje {
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  text-align: center;
-}
-
-.mensaje.success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
-}
-
-.mensaje.error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-}
-
-.confirmacion-box {
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.3);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.confirmacion-box p {
-  color: #fbbf24;
-  font-size: 0.875rem;
-  margin: 0 0 1rem 0;
-}
-
-.confirmacion-acciones {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.btn-confirmar {
-  padding: 0.625rem 1rem;
-  border: none;
-  border-radius: 6px;
-  background: #004aad;
-  color: #fff;
-  font-size: 0.875rem;
+  padding: 0.125rem 0.5rem;
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+  color: var(--primary-text);
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
 }
 
-.btn-confirmar:hover:not(:disabled) {
-  background: #003380;
-}
-
-.btn-confirmar:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-cancelar {
-  padding: 0.625rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.btn-cancelar:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.alumnos-header {
+.resumen {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
-.alumnos-stats {
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+.contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.stat-divider {
-  margin: 0 0.5rem;
-  color: rgba(255, 255, 255, 0.3);
+.contador {
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  font-size: 0.8125rem;
+  color: var(--text-2);
 }
 
-.stat-presente {
-  color: #6ee7b7;
+.contador.presente {
+  background: var(--success-soft);
+  color: var(--success-text);
 }
 
-.stat-ausente {
-  color: #fca5a5;
+.contador.ausente {
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 
-.stat-justificado {
-  color: #fcd34d;
+.contador.justificado {
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 
 .acciones-rapidas {
@@ -761,255 +637,124 @@ const totalJustificados = computed(() => {
   gap: 0.5rem;
 }
 
-.btn-todos {
+.btn-chico {
   padding: 0.375rem 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-todos:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.btn-todos:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-presente:hover:not(:disabled) {
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #6ee7b7;
-}
-
-.btn-ausente:hover:not(:disabled) {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-}
-
-.empty-alumnos {
-  text-align: center;
-  padding: 3rem;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-}
-
-.loading-alumnos {
-  text-align: center;
-  padding: 3rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.alumnos-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.alumno-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1rem;
-  padding: 0.625rem 0.875rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  align-items: center;
-}
-
-.alumno-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.alumno-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #004aad, #022451);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.alumno-nombre .nombre {
-  font-weight: 500;
-  color: #fff;
-}
-
-.asistencia-opciones {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.opcion {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.opcion input {
-  display: none;
-}
-
-.opcion.presente.active {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #6ee7b7;
-}
-
-.opcion.ausente.active {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-}
-
-.opcion.justificado.active {
-  background: rgba(234, 179, 8, 0.15);
-  border-color: rgba(234, 179, 8, 0.4);
-  color: #fcd34d;
-}
-
-.opcion:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.observacion-group {
-  grid-column: 1 / -1;
-}
-
-.observacion-input {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
   font-size: 0.8125rem;
-  font-family: inherit;
-}
-
-.observacion-input:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.observacion-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.guardar-section {
-  margin-top: 1.5rem;
-  display: flex;
-  justify-content: center;
-}
-
-.btn-guardar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 2rem;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #022451, #004aad);
-  color: #fff;
-  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  min-width: 200px;
 }
 
-.btn-guardar:hover:not(:disabled) {
-  box-shadow: 0 4px 16px rgba(0, 74, 173, 0.5);
-  transform: translateY(-1px);
+.btn-chico:hover {
+  background: var(--surface-hover);
 }
 
-.btn-guardar:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.buscador {
+  margin-bottom: 0.75rem;
 }
 
-.informe-section {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+.lista {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+}
+
+.sin-resultados {
+  padding: 1.5rem;
   text-align: center;
+  color: var(--text-muted);
 }
 
-.informe-estado {
-  font-size: 0.8125rem;
-  margin: 0;
-}
-
-.informe-ok {
-  color: #6ee7b7;
-}
-
-.btn-remitir {
+.barra-guardar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  border: 1px solid rgba(0, 74, 173, 0.4);
-  border-radius: 8px;
-  background: rgba(0, 74, 173, 0.1);
-  color: #8fbcf5;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem -1.5rem 0;
+  padding: 0.875rem 1.5rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.barra-estado {
   font-size: 0.875rem;
   font-weight: 600;
+}
+
+.pendiente {
+  color: var(--warning-text);
+}
+
+.ok {
+  color: var(--success-text);
+}
+
+.barra-acciones {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.btn-primario,
+.btn-secundario {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6875rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
 }
 
-.btn-remitir:hover:not(:disabled) {
-  background: rgba(0, 74, 173, 0.2);
+.btn-primario {
+  border: none;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
-.btn-remitir:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-primario:hover:not(:disabled) {
+  background: var(--primary-hover);
 }
 
-@media (max-width: 768px) {
-  .filtros-section {
-    flex-direction: column;
+.btn-secundario {
+  border: 1px solid var(--primary-border);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.btn-primario:disabled,
+.btn-secundario:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 600px) {
+  .page-content {
+    padding: 1rem 1rem 0;
   }
 
-  .alumnos-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .alumno-card {
+  .filtros {
     grid-template-columns: 1fr;
   }
 
-  .asistencia-opciones {
-    justify-content: flex-start;
+  .barra-guardar {
+    margin: 1rem -1rem 0;
+    padding: 0.75rem 1rem;
+  }
+
+  .barra-acciones,
+  .barra-acciones button {
+    flex: 1;
+    justify-content: center;
   }
 }
 </style>

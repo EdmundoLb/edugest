@@ -1,25 +1,20 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
 
 const router = useRouter()
-const { login, initSession } = useAuth()
+const { state, login, cargarPerfil } = useAuth()
 
 const email = ref('')
 const password = ref('')
-const remember = ref(false)
 const loading = ref(false)
 const error = ref('')
 const resetSuccess = ref(false)
 const resetEmail = ref('')
 const showResetForm = ref(false)
-
-onMounted(async () => {
-  await initSession()
-})
 
 async function handleLogin() {
   error.value = ''
@@ -29,67 +24,34 @@ async function handleLogin() {
   }
   loading.value = true
   try {
-    await login(email.value, password.value)
+    const { session, user } = await login(email.value, password.value)
 
-    let user = null
-    for (let i = 0; i < 3; i++) {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      const { data } = await supabase.auth.getSession()
-      if (data?.session?.user) {
-        user = data.session.user
-        break
-      }
-    }
-
-    if (!user) {
-      error.value = 'Error al obtener sesión'
-      loading.value = false
-      return
-    }
-
-    const { data: perfil } = await supabase
-      .from('perfiles')
-      .select('id, rol')
-      .eq('user_id', user.id)
-      .single()
+    state.session = session
+    state.user = user
+    await cargarPerfil()
+    const perfil = state.perfil
 
     if (!perfil) {
       error.value = 'No se encontró un perfil asociado a este usuario'
-      loading.value = false
       return
     }
 
     if (perfil.rol === 'estudiante') {
-      const { data: alumno } = await supabase
-        .from('alumnos')
-        .select('id')
-        .eq('perfil_id', perfil.id)
-        .single()
-
-      if (alumno) {
+      if (state.datosUsuario) {
         router.push('/MiAsistencia')
       } else {
         error.value = 'No se encontró un estudiante asociado a este perfil'
-        loading.value = false
       }
     } else if (perfil.rol === 'docente') {
-      const { data: profesor } = await supabase
-        .from('profesores')
-        .select('id')
-        .eq('perfil_id', perfil.id)
-        .single()
-
-      if (profesor) {
+      if (state.datosUsuario) {
         router.push('/ProfesorDashboard')
       } else {
         error.value = 'No se encontró un docente asociado a este perfil'
-        loading.value = false
       }
     } else if (perfil.rol === 'admin') {
       router.push('/admin')
     } else {
       error.value = 'Rol no reconocido'
-      loading.value = false
     }
   } catch (e) {
     if (e.message === 'Invalid login credentials') {
@@ -111,7 +73,7 @@ async function handleResetPassword() {
   loading.value = true
   try {
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail.value, {
-      redirectTo: `${window.location.origin}/reset-password`
+      redirectTo: `${window.location.origin}/reset-password`,
     })
     if (resetError) throw resetError
     resetSuccess.value = true
@@ -147,7 +109,7 @@ function hideResetForm() {
     <div class="login-card">
       <div class="brand">
         <div class="brand-icon">
-          <img src="@/images/CCGLOGO.png" alt="Centro Cultural Gymmart" />
+          <img src="@/images/edugest-logo.png" alt="EduGest" class="logo-edugest" />
         </div>
         <h1>Centro Cultural Gymmart</h1>
         <p class="brand-sub">Control de Asistencia</p>
@@ -204,11 +166,9 @@ function hideResetForm() {
         </div>
 
         <div class="field-row">
-          <label class="checkbox-label">
-            <input v-model="remember" type="checkbox" :disabled="loading" />
-            <span>Recordarme</span>
-          </label>
-          <button type="button" class="forgot-link" @click="showResetPasswordForm">¿Olvidaste tu contraseña?</button>
+          <button type="button" class="forgot-link" @click="showResetPasswordForm">
+            ¿Olvidaste tu contraseña?
+          </button>
         </div>
 
         <transition name="fade">
@@ -229,7 +189,7 @@ function hideResetForm() {
         </transition>
 
         <button type="submit" class="btn-login" :disabled="loading">
-          <Spinner v-if="loading" size="small" variant="light" />
+          <AppSpinner v-if="loading" size="small" variant="light" />
           <span v-else>
             <svg
               viewBox="0 0 24 24"
@@ -245,7 +205,11 @@ function hideResetForm() {
         </button>
       </form>
 
-      <form v-if="showResetForm && !resetSuccess" @submit.prevent="handleResetPassword" class="login-form">
+      <form
+        v-if="showResetForm && !resetSuccess"
+        @submit.prevent="handleResetPassword"
+        class="login-form"
+      >
         <div class="reset-header">
           <h2>Recuperar contraseña</h2>
           <p>Ingresa tu correo para recibir un enlace de recuperación</p>
@@ -254,8 +218,16 @@ function hideResetForm() {
         <div class="field">
           <label for="reset-email">Correo electrónico</label>
           <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
             </svg>
             <input
               id="reset-email"
@@ -270,7 +242,13 @@ function hideResetForm() {
 
         <transition name="fade">
           <div v-if="error" class="error-msg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="error-icon"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
@@ -280,25 +258,27 @@ function hideResetForm() {
         </transition>
 
         <button type="submit" class="btn-login" :disabled="loading">
-          <Spinner v-if="loading" size="small" variant="light" />
+          <AppSpinner v-if="loading" size="small" variant="light" />
           <span>{{ loading ? 'Enviando...' : 'Enviar correo de recuperación' }}</span>
         </button>
 
-        <button type="button" class="btn-volver" @click="hideResetForm">
-          ← Volver al login
-        </button>
+        <button type="button" class="btn-volver" @click="hideResetForm">← Volver al login</button>
       </form>
 
       <div v-if="showResetForm && resetSuccess" class="success-reset">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="success-icon">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="success-icon"
+        >
           <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
           <polyline points="22 4 12 14.01 9 11.01" />
         </svg>
         <h2>Correo enviado</h2>
         <p>Revisa tu bandeja de entrada para restablecer tu contraseña.</p>
-        <button type="button" class="btn-volver" @click="hideResetForm">
-          ← Volver al login
-        </button>
+        <button type="button" class="btn-volver" @click="hideResetForm">← Volver al login</button>
       </div>
 
       <p class="register-link">
@@ -317,7 +297,7 @@ function hideResetForm() {
   align-items: center;
   justify-content: center;
   padding-top: 100px;
-  background: linear-gradient(135deg, #000000 0%, #022451 50%, #004aad 100%);
+  background: var(--auth-bg);
   overflow-y: auto;
   font-family:
     'Inter',
@@ -384,10 +364,10 @@ function hideResetForm() {
   position: relative;
   width: 100%;
   max-width: 420px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-2);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 2.5rem 2rem;
   box-shadow:
@@ -416,14 +396,14 @@ function hideResetForm() {
 .brand h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   letter-spacing: -0.02em;
 }
 
 .brand-sub {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   font-weight: 400;
 }
 
@@ -442,7 +422,7 @@ function hideResetForm() {
 .field label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
   letter-spacing: 0.01em;
 }
 
@@ -457,36 +437,36 @@ function hideResetForm() {
   left: 12px;
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-subtle);
   pointer-events: none;
   transition: color 0.2s;
 }
 
 .input-wrapper:focus-within .input-icon {
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .field input {
   width: 100%;
   padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   font-size: 0.9375rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
   transition: all 0.2s;
   outline: none;
   font-family: inherit;
 }
 
 .field input::placeholder {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-subtle);
 }
 
 .field input:focus {
-  border-color: #004aad;
-  box-shadow: 0 0 0 3px rgba(0, 74, 173, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+  background: var(--surface-2);
 }
 
 .field input:disabled {
@@ -497,45 +477,25 @@ function hideResetForm() {
 .field-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   font-size: 0.8125rem;
 }
 
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.5);
-  user-select: none;
-}
-
-.checkbox-label input {
-  width: 16px;
-  height: 16px;
-  accent-color: #004aad;
-  cursor: pointer;
-}
-
-.checkbox-label input:disabled {
-  cursor: not-allowed;
-}
-
 .forgot-link {
-  color: #a6a6a6;
+  color: var(--text-muted);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s;
 }
 
 .forgot-link:hover {
-  color: #ffffff;
+  color: var(--text);
 }
 
 .forgot-link {
   background: none;
   border: none;
-  color: #a6a6a6;
+  color: var(--text-muted);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s;
@@ -552,13 +512,13 @@ function hideResetForm() {
 .reset-header h2 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   margin: 0 0 0.5rem 0;
 }
 
 .reset-header p {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -568,9 +528,9 @@ function hideResetForm() {
   padding: 0.75rem;
   margin-top: 0.75rem;
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-2);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -578,8 +538,8 @@ function hideResetForm() {
 }
 
 .btn-volver:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .success-reset {
@@ -590,20 +550,20 @@ function hideResetForm() {
 .success-reset .success-icon {
   width: 48px;
   height: 48px;
-  color: #6ee7b7;
+  color: var(--success-text);
   margin-bottom: 1rem;
 }
 
 .success-reset h2 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   margin: 0 0 0.5rem 0;
 }
 
 .success-reset p {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   margin: 0 0 1.5rem 0;
 }
 
@@ -611,10 +571,10 @@ function hideResetForm() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 0.8125rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.15);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
 }
@@ -634,7 +594,7 @@ function hideResetForm() {
   border: none;
   border-radius: 10px;
   background: linear-gradient(135deg, #022451, #004aad);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
@@ -643,7 +603,7 @@ function hideResetForm() {
 }
 
 .btn-login:hover:not(:disabled) {
-  background: linear-gradient(135deg, #003380, #003380);
+  background: var(--primary-hover);
   box-shadow: 0 4px 16px rgba(0, 74, 173, 0.5);
   transform: translateY(-1px);
 }
@@ -666,16 +626,16 @@ function hideResetForm() {
   margin-top: 1.5rem;
   text-align: center;
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
 }
 
 .register-link a {
-  color: #004aad;
+  color: var(--primary-text);
   transition: color 0.2s;
 }
 
 .register-link a:hover {
-  color: #022451;
+  color: var(--primary-text);
   text-decoration: underline;
 }
 

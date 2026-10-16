@@ -12,17 +12,17 @@
 defineProps({
   value: {
     type: [String, Number],
-    required: true
+    required: true,
   },
   label: {
     type: String,
-    required: true
+    required: true,
   },
   variant: {
     type: String,
     default: '',
-    validator: (v) => ['', 'presente', 'ausente', 'porcentaje'].includes(v)
-  }
+    validator: (v) => ['', 'presente', 'ausente', 'porcentaje'].includes(v),
+  },
 })
 </script>
 
@@ -32,14 +32,14 @@ defineProps({
   flex-direction: column;
   align-items: center;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
 .stat-icon {
   margin-bottom: 0.5rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .stat-icon :deep(svg) {
@@ -50,24 +50,24 @@ defineProps({
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   margin-top: 0.25rem;
 }
 
 .stat-card.presente .stat-value {
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .stat-card.ausente .stat-value {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .stat-card.porcentaje .stat-value {
-  color: #004aad;
+  color: var(--primary-text);
 }
 </style>

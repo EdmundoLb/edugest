@@ -1,6 +1,7 @@
 <script setup>
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { formatearFecha } from '@/lib/fecha'
@@ -10,11 +11,12 @@ import {
   linkWhatsappGrupo,
   armarMensajeGrupoAsistencia,
 } from '@/lib/whatsapp'
-import Pagination from '@/components/Pagination.vue'
+import AppPagination from '@/components/AppPagination.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
 
-const router = useRouter()
+const toast = useToast()
+
 const { state } = useAuth()
 
 const loading = ref(true)
@@ -39,7 +41,8 @@ async function cargarInformes() {
   try {
     const { data, error } = await supabase
       .from('informes_asistencia')
-      .select(`
+      .select(
+        `
         id,
         fecha,
         estado,
@@ -47,25 +50,22 @@ async function cargarInformes() {
         horario_id,
         horarios ( dia_semana, cursos ( nombre ) ),
         profesores ( nombre, apellido )
-      `)
+      `,
+      )
       .order('creado_at', { ascending: false })
 
     if (error) throw error
     informes.value = data || []
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar los informes', e)
   } finally {
     loading.value = false
   }
 }
 
-const informesFiltrados = computed(() =>
-  informes.value.filter((i) => i.estado === filtro.value)
-)
+const informesFiltrados = computed(() => informes.value.filter((i) => i.estado === filtro.value))
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(informesFiltrados.value.length / pageSize))
-)
+const totalPages = computed(() => Math.max(1, Math.ceil(informesFiltrados.value.length / pageSize)))
 
 const informesPagina = computed(() => {
   const inicio = (currentPage.value - 1) * pageSize
@@ -103,7 +103,7 @@ async function toggleExpandir(informe) {
       .map((a) => ({ ...a.alumnos, estado: a.estado, observacion: a.observacion }))
       .sort((a, b) => a.apellido.localeCompare(b.apellido))
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudo cargar el detalle del informe', e)
   } finally {
     cargandoDetalle.value = false
   }
@@ -119,7 +119,7 @@ function waLink(alumno) {
       fecha: informeAbierto.value.fecha,
       estado: alumno.estado,
       observacion: alumno.observacion,
-    })
+    }),
   )
 }
 
@@ -136,7 +136,7 @@ function linkGrupo() {
       fecha: informeAbierto.value.fecha,
       ausentes: ausentesYJustificados.value.ausentes,
       justificados: ausentesYJustificados.value.justificados,
-    })
+    }),
   )
 }
 
@@ -156,13 +156,14 @@ async function marcarRevisado(informe) {
 
     const local = informes.value.find((i) => i.id === informe.id)
     if (local) local.estado = 'revisado'
+    toast.exito('Informe marcado como revisado')
 
     if (informeAbierto.value?.id === informe.id) {
       informeAbierto.value = null
       detalleAlumnos.value = []
     }
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudo marcar como revisado', e)
   } finally {
     marcandoRevisado.value = false
   }
@@ -171,21 +172,15 @@ async function marcarRevisado(informe) {
 
 <template>
   <div class="informes-page">
-    <header class="page-header">
-      <div class="header-left">
-        <button class="btn-back" @click="router.push('/admin')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="back-icon">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1>Informes de Asistencia</h1>
-      </div>
-      <router-link to="/admin" class="btn-volver">← Volver al panel</router-link>
-    </header>
+    <PageHeader
+      titulo="Informes de asistencia"
+      subtitulo="Informes remitidos por los docentes para avisar a las familias"
+      volver="/admin"
+    />
 
-    <main class="page-content">
+    <div class="page-content">
       <div v-if="loading" class="loading-state">
-        <Spinner size="large" />
+        <AppSpinner size="large" />
         <p>Cargando informes...</p>
       </div>
 
@@ -209,7 +204,11 @@ async function marcarRevisado(informe) {
 
         <EmptyState
           v-if="informesFiltrados.length === 0"
-          :title="filtro === 'pendiente' ? 'No hay informes pendientes' : 'Todavía no hay informes revisados'"
+          :title="
+            filtro === 'pendiente'
+              ? 'No hay informes pendientes'
+              : 'Todavía no hay informes revisados'
+          "
           hint="Los profesores remiten un informe después de tomar asistencia, desde Llamar Lista."
         />
 
@@ -217,15 +216,27 @@ async function marcarRevisado(informe) {
           <div v-for="informe in informesPagina" :key="informe.id" class="informe-card">
             <button class="informe-resumen" @click="toggleExpandir(informe)">
               <div class="informe-info">
-                <span class="informe-curso">{{ informe.horarios?.cursos?.nombre || 'Sin curso' }}</span>
+                <span class="informe-curso">{{
+                  informe.horarios?.cursos?.nombre || 'Sin curso'
+                }}</span>
                 <span class="informe-meta">
-                  {{ formatearFecha(informe.fecha, { weekday: 'long', day: 'numeric', month: 'long' }) }}
+                  {{
+                    formatearFecha(informe.fecha, {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    })
+                  }}
                   · {{ informe.profesores?.nombre }} {{ informe.profesores?.apellido }}
                 </span>
               </div>
               <svg
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                class="chevron" :class="{ open: informeAbierto?.id === informe.id }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="chevron"
+                :class="{ open: informeAbierto?.id === informe.id }"
               >
                 <path d="M6 9l6 6 6-6" />
               </svg>
@@ -233,13 +244,16 @@ async function marcarRevisado(informe) {
 
             <div v-if="informeAbierto?.id === informe.id" class="informe-detalle">
               <div v-if="cargandoDetalle" class="loading-detalle">
-                <Spinner size="small" />
+                <AppSpinner size="small" />
                 <span>Cargando alumnos...</span>
               </div>
 
               <div v-else>
                 <a
-                  v-if="ausentesYJustificados.ausentes.length || ausentesYJustificados.justificados.length"
+                  v-if="
+                    ausentesYJustificados.ausentes.length ||
+                    ausentesYJustificados.justificados.length
+                  "
                   :href="linkGrupo()"
                   target="_blank"
                   rel="noopener"
@@ -252,26 +266,28 @@ async function marcarRevisado(informe) {
                 </p>
 
                 <div class="detalle-alumnos">
-                <div v-for="alumno in detalleAlumnos" :key="alumno.id" class="detalle-alumno">
-                  <div class="detalle-alumno-info">
-                    <span class="detalle-nombre">{{ alumno.nombre }} {{ alumno.apellido }}</span>
-                    <span :class="['detalle-status', alumno.estado]">
-                      {{ ESTADO_LABEL[alumno.estado] }}
-                    </span>
-                    <span v-if="alumno.observacion" class="detalle-observacion">{{ alumno.observacion }}</span>
-                  </div>
+                  <div v-for="alumno in detalleAlumnos" :key="alumno.id" class="detalle-alumno">
+                    <div class="detalle-alumno-info">
+                      <span class="detalle-nombre">{{ alumno.nombre }} {{ alumno.apellido }}</span>
+                      <span :class="['detalle-status', alumno.estado]">
+                        {{ ESTADO_LABEL[alumno.estado] }}
+                      </span>
+                      <span v-if="alumno.observacion" class="detalle-observacion">{{
+                        alumno.observacion
+                      }}</span>
+                    </div>
 
-                  <a
-                    v-if="waLink(alumno)"
-                    :href="waLink(alumno)"
-                    target="_blank"
-                    rel="noopener"
-                    class="btn-whatsapp"
-                  >
-                    Enviar por WhatsApp
-                  </a>
-                  <span v-else class="sin-telefono">Sin teléfono cargado</span>
-                </div>
+                    <a
+                      v-if="waLink(alumno)"
+                      :href="waLink(alumno)"
+                      target="_blank"
+                      rel="noopener"
+                      class="btn-whatsapp"
+                    >
+                      Enviar por WhatsApp
+                    </a>
+                    <span v-else class="sin-telefono">Sin teléfono cargado</span>
+                  </div>
                 </div>
               </div>
 
@@ -288,80 +304,19 @@ async function marcarRevisado(informe) {
           </div>
         </div>
 
-        <Pagination
+        <AppPagination
           :current-page="currentPage"
           :total-pages="totalPages"
           @page-change="currentPage = $event"
         />
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .informes-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.page-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-back:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.back-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.btn-volver {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.btn-volver:hover {
-  color: #fff;
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .page-content {
@@ -373,7 +328,7 @@ async function marcarRevisado(informe) {
 .loading-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .filtro-tabs {
@@ -384,10 +339,10 @@ async function marcarRevisado(informe) {
 
 .filtro-tab {
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.6);
+  background: var(--surface);
+  color: var(--text-2);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -396,13 +351,13 @@ async function marcarRevisado(informe) {
 }
 
 .filtro-tab:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 .filtro-tab.active {
-  background: rgba(0, 74, 173, 0.2);
-  border-color: rgba(0, 74, 173, 0.4);
-  color: #fff;
+  background: var(--primary-soft-strong);
+  border-color: var(--primary-border);
+  color: var(--text);
 }
 
 .informes-list {
@@ -412,8 +367,8 @@ async function marcarRevisado(informe) {
 }
 
 .informe-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -442,19 +397,19 @@ async function marcarRevisado(informe) {
 .informe-curso {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .informe-meta {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   text-transform: capitalize;
 }
 
 .chevron {
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   flex-shrink: 0;
   transition: transform 0.2s;
 }
@@ -465,7 +420,7 @@ async function marcarRevisado(informe) {
 
 .informe-detalle {
   padding: 0 1.25rem 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 
 .loading-detalle {
@@ -473,7 +428,7 @@ async function marcarRevisado(informe) {
   align-items: center;
   gap: 0.75rem;
   padding: 1.25rem 0;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.875rem;
 }
 
@@ -491,8 +446,8 @@ async function marcarRevisado(informe) {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.625rem 0.875rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -505,7 +460,7 @@ async function marcarRevisado(informe) {
 
 .detalle-nombre {
   font-size: 0.875rem;
-  color: #fff;
+  color: var(--text);
 }
 
 .detalle-status {
@@ -516,31 +471,31 @@ async function marcarRevisado(informe) {
 }
 
 .detalle-status.presente {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-text);
+  background: var(--success-soft);
 }
 
 .detalle-status.ausente {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger-text);
+  background: var(--danger-soft);
 }
 
 .detalle-status.justificado {
-  color: #fcd34d;
-  background: rgba(234, 179, 8, 0.15);
+  color: var(--warning-text);
+  background: var(--warning-soft);
 }
 
 .detalle-observacion {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
 }
 
 .btn-whatsapp {
   padding: 0.5rem 0.875rem;
   border-radius: 6px;
-  background: rgba(37, 211, 102, 0.15);
-  border: 1px solid rgba(37, 211, 102, 0.4);
-  color: #6ee7b7;
+  background: var(--whatsapp-soft);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
   font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
@@ -549,12 +504,12 @@ async function marcarRevisado(informe) {
 }
 
 .btn-whatsapp:hover {
-  background: rgba(37, 211, 102, 0.25);
+  background: var(--whatsapp-soft);
 }
 
 .sin-telefono {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-subtle);
   white-space: nowrap;
 }
 
@@ -566,9 +521,9 @@ async function marcarRevisado(informe) {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   border-radius: 8px;
-  background: rgba(37, 211, 102, 0.15);
-  border: 1px solid rgba(37, 211, 102, 0.4);
-  color: #6ee7b7;
+  background: var(--whatsapp-soft);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
@@ -576,12 +531,12 @@ async function marcarRevisado(informe) {
 }
 
 .btn-whatsapp-grupo:hover {
-  background: rgba(37, 211, 102, 0.25);
+  background: var(--whatsapp-soft);
 }
 
 .sin-ausencias {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   margin-bottom: 1rem;
 }
 
@@ -595,8 +550,8 @@ async function marcarRevisado(informe) {
   padding: 0.625rem 1.25rem;
   border: none;
   border-radius: 8px;
-  background: #004aad;
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
@@ -605,7 +560,7 @@ async function marcarRevisado(informe) {
 }
 
 .btn-revisado:hover:not(:disabled) {
-  background: #003380;
+  background: var(--primary-hover);
 }
 
 .btn-revisado:disabled {

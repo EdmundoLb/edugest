@@ -1,11 +1,14 @@
 <script setup>
+import PanelRiesgo from '@/components/PanelRiesgo.vue'
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted } from 'vue'
-import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { hoyLocal, formatearFecha } from '@/lib/fecha'
-import Spinner from '@/components/Spinner.vue'
+import AppSpinner from '@/components/AppSpinner.vue'
 
-const { state } = useAuth()
+const toast = useToast()
+
 const loading = ref(true)
 const stats = ref({ alumnos: 0, profesores: 0, cursos: 0, asistenciaHoy: 0, informesPendientes: 0 })
 const ultimosRegistros = ref([])
@@ -20,7 +23,7 @@ async function cargarDashboard() {
     const [{ count: alumnos }, { count: profesores }, { count: cursos }] = await Promise.all([
       supabase.from('alumnos').select('*', { count: 'exact', head: true }),
       supabase.from('profesores').select('*', { count: 'exact', head: true }),
-      supabase.from('cursos').select('*', { count: 'exact', head: true })
+      supabase.from('cursos').select('*', { count: 'exact', head: true }),
     ])
 
     const hoy = hoyLocal()
@@ -39,24 +42,26 @@ async function cargarDashboard() {
       profesores: profesores || 0,
       cursos: cursos || 0,
       asistenciaHoy: asistenciaHoy || 0,
-      informesPendientes: informesPendientes || 0
+      informesPendientes: informesPendientes || 0,
     }
 
     const { data: registros } = await supabase
       .from('asistencia')
-      .select(`
+      .select(
+        `
         id,
         fecha,
         estado,
         alumno_id,
         horarios (cursos (nombre))
-      `)
+      `,
+      )
       .order('fecha', { ascending: false })
       .limit(5)
 
     ultimosRegistros.value = registros || []
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudo cargar el panel', e)
   } finally {
     loading.value = false
   }
@@ -71,18 +76,11 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 
 <template>
   <div class="dashboard">
-    <header class="dashboard-header">
-      <div class="header-left">
-        <h1>Panel de Administración</h1>
-      </div>
-      <div class="header-right">
-        <span class="user-email">{{ state.user?.email }}</span>
-      </div>
-    </header>
+    <PageHeader titulo="Panel de administración" subtitulo="Resumen general del centro" />
 
-    <main class="dashboard-content">
+    <div class="dashboard-content">
       <div v-if="loading" class="loading-state">
-        <Spinner size="large" />
+        <AppSpinner size="large" />
         <p>Cargando dashboard...</p>
       </div>
 
@@ -110,6 +108,8 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
           </div>
         </div>
 
+        <PanelRiesgo con-avisos class="panel-riesgo" />
+
         <div class="dashboard-sections">
           <section class="section-card">
             <h2 class="section-title">Acciones rápidas</h2>
@@ -122,7 +122,7 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
                 </svg>
                 Ver Alumnos
               </router-link>
-              <router-link to="/MisCursos" class="action-btn">
+              <router-link to="/admin/cursos" class="action-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
@@ -154,7 +154,9 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
             <div v-else class="recent-list">
               <div v-for="reg in ultimosRegistros" :key="reg.id" class="recent-item">
                 <div class="recent-info">
-                  <span class="recent-curso">{{ reg.horarios?.cursos?.nombre || 'Sin curso' }}</span>
+                  <span class="recent-curso">{{
+                    reg.horarios?.cursos?.nombre || 'Sin curso'
+                  }}</span>
                   <span class="recent-fecha">{{ formatFecha(reg.fecha) }}</span>
                 </div>
                 <span :class="['recent-status', reg.estado]">
@@ -165,59 +167,29 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
           </section>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .dashboard {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-}
-
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dashboard-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-email {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .dashboard-content {
   padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .loading-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
-
 .dashboard-grid {
-  max-width: 960px;
+  width: 100%;
 }
 
 .stats-row {
@@ -232,29 +204,29 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
   flex-direction: column;
   align-items: center;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
 .stat-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   margin-top: 0.25rem;
 }
 
 .stat-card.presente .stat-value {
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .stat-card.ausente .stat-value {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .dashboard-sections {
@@ -264,8 +236,8 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 }
 
 .section-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
 }
@@ -273,7 +245,7 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 .section-title {
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   margin: 0 0 1rem 0;
 }
 
@@ -288,10 +260,10 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
@@ -299,9 +271,9 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 }
 
 .action-btn:hover {
-  background: rgba(0, 74, 173, 0.2);
-  border-color: rgba(0, 74, 173, 0.4);
-  color: #fff;
+  background: var(--primary-soft-strong);
+  border-color: var(--primary-border);
+  color: var(--text);
 }
 
 .action-btn svg {
@@ -311,7 +283,7 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 }
 
 .empty-message {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   font-size: 0.875rem;
   text-align: center;
   padding: 2rem;
@@ -328,7 +300,7 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface);
   border-radius: 6px;
 }
 
@@ -340,12 +312,12 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 
 .recent-curso {
   font-size: 0.875rem;
-  color: #fff;
+  color: var(--text);
 }
 
 .recent-fecha {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
 }
 
 .recent-status {
@@ -356,18 +328,18 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 }
 
 .recent-status.presente {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-text);
+  background: var(--success-soft);
 }
 
 .recent-status.ausente {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger-text);
+  background: var(--danger-soft);
 }
 
 .recent-status.justificado {
-  color: #fcd34d;
-  background: rgba(234, 179, 8, 0.15);
+  color: var(--warning-text);
+  background: var(--warning-soft);
 }
 
 @media (max-width: 768px) {
@@ -382,5 +354,9 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
   .dashboard-content {
     padding: 1rem;
   }
+}
+
+.panel-riesgo {
+  margin: 1.5rem 0;
 }
 </style>

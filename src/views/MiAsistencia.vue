@@ -1,9 +1,15 @@
 <script setup>
+import { useToast } from '@/composables/useToast'
+import { porcentajeAsistencia } from '@/lib/api/reportes'
+import { UMBRAL_PORCENTAJE, FALTAS_SEGUIDAS } from '@/lib/api/alertas'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import { parseFechaLocal } from '@/lib/fecha'
-import Spinner from '@/components/Spinner.vue'
+import { parseFechaLocal, formatearHora } from '@/lib/fecha'
+import AppSpinner from '@/components/AppSpinner.vue'
+
+const toast = useToast()
 
 const { state } = useAuth()
 const loading = ref(true)
@@ -17,16 +23,14 @@ onMounted(async () => {
 async function cargarAsistencia() {
   loading.value = true
   try {
-    const { data: alumno } = await supabase
-      .from('alumnos')
-      .select('id')
-      .eq('perfil_id', state.perfil?.id)
-      .single()
+    // Fila de alumnos del usuario logueado, ya cargada por el store de auth.
+    const alumno = state.datosUsuario
 
     if (alumno) {
       const { data: asistenciaData, error } = await supabase
         .from('asistencia')
-        .select(`
+        .select(
+          `
           id,
           fecha,
           estado,
@@ -38,7 +42,8 @@ async function cargarAsistencia() {
             hora_fin,
             cursos (id, nombre)
           )
-        `)
+        `,
+        )
         .eq('alumno_id', alumno.id)
         .order('fecha', { ascending: false })
 
@@ -46,7 +51,7 @@ async function cargarAsistencia() {
         asistencia.value = asistenciaData
 
         const cursosMap = new Map()
-        asistenciaData.forEach(a => {
+        asistenciaData.forEach((a) => {
           if (a.horarios?.cursos) {
             cursosMap.set(a.horarios.cursos.id, a.horarios.cursos)
           }
@@ -55,7 +60,7 @@ async function cargarAsistencia() {
       }
     }
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudo cargar tu asistencia', e)
   } finally {
     loading.value = false
   }
@@ -69,20 +74,51 @@ const nombreAlumno = computed(() => {
 
 const estadisticas = computed(() => {
   const total = asistencia.value.length
-  const presentes = asistencia.value.filter(a => a.estado === 'presente').length
-  const ausentes = asistencia.value.filter(a => a.estado === 'ausente').length
-  const justificados = asistencia.value.filter(a => a.estado === 'justificado').length
+  const presentes = asistencia.value.filter((a) => a.estado === 'presente').length
+  const ausentes = asistencia.value.filter((a) => a.estado === 'ausente').length
+  const justificados = asistencia.value.filter((a) => a.estado === 'justificado').length
   const base = total - justificados
   const porcentaje = base > 0 ? Math.round((presentes / base) * 100) : 0
   return { total, presentes, ausentes, justificados, porcentaje }
 })
 
+function resumenCurso(registros) {
+  const t = { total: registros.length, presentes: 0, justificados: 0 }
+  registros.forEach((r) => {
+    if (r.estado === 'presente') t.presentes++
+    if (r.estado === 'justificado') t.justificados++
+  })
+  // Faltas seguidas más recientes (los registros vienen de la fecha más nueva
+  // a la más vieja).
+  let seguidas = 0
+  for (const r of registros) {
+    if (r.estado !== 'ausente') break
+    seguidas++
+  }
+  return { porcentaje: porcentajeAsistencia(t), seguidas }
+}
+
+// Cursos en los que conviene avisarle al estudiante.
+const alertas = computed(() =>
+  Object.values(asistenciaPorCurso.value)
+    .map((d) => ({
+      curso: d.curso.nombre,
+      ...resumenCurso(d.registros),
+      total: d.registros.length,
+    }))
+    .filter(
+      (a) =>
+        a.seguidas >= FALTAS_SEGUIDAS ||
+        (a.total >= 3 && a.porcentaje !== null && a.porcentaje < UMBRAL_PORCENTAJE),
+    ),
+)
+
 const asistenciaPorCurso = computed(() => {
   const agrupado = {}
-  cursos.value.forEach(curso => {
+  cursos.value.forEach((curso) => {
     agrupado[curso.id] = {
       curso: curso,
-      registros: asistencia.value.filter(a => a.horarios?.cursos?.id === curso.id)
+      registros: asistencia.value.filter((a) => a.horarios?.cursos?.id === curso.id),
     }
   })
   return agrupado
@@ -91,18 +127,11 @@ const asistenciaPorCurso = computed(() => {
 
 <template>
   <div class="asistencia-page">
-    <header class="page-header">
-      <div class="header-left">
-        <h1>Mi Asistencia</h1>
-      </div>
-      <div class="header-right">
-        <span class="user-name">{{ nombreAlumno }}</span>
-      </div>
-    </header>
+    <PageHeader titulo="Mi asistencia" :subtitulo="nombreAlumno" />
 
-    <main class="page-content">
+    <div class="page-content">
       <div v-if="loading" class="loading-state">
-        <Spinner size="large" />
+        <AppSpinner size="large" />
         <p>Cargando asistencia...</p>
       </div>
 
@@ -135,8 +164,41 @@ const asistenciaPorCurso = computed(() => {
           </div>
         </div>
 
+        <div v-if="alertas.length" class="alerta-estudiante" role="status">
+          <strong>Atención con tu asistencia</strong>
+          <ul>
+            <li v-for="a in alertas" :key="a.curso">
+              {{ a.curso }}:
+              <template v-if="a.seguidas >= FALTAS_SEGUIDAS"
+                >{{ a.seguidas }} faltas seguidas</template
+              >
+              <template
+                v-if="
+                  a.seguidas >= FALTAS_SEGUIDAS &&
+                  a.porcentaje !== null &&
+                  a.porcentaje < UMBRAL_PORCENTAJE
+                "
+              >
+                y
+              </template>
+              <template v-if="a.porcentaje !== null && a.porcentaje < UMBRAL_PORCENTAJE">
+                {{ a.porcentaje }}% de asistencia
+              </template>
+            </li>
+          </ul>
+          <span
+            >Si tus faltas tienen justificación, avisale a tu docente o a la administración.</span
+          >
+        </div>
+
         <div v-if="asistencia.length === 0" class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            class="empty-icon"
+          >
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
@@ -150,7 +212,19 @@ const asistenciaPorCurso = computed(() => {
             <div class="curso-header">
               <span class="curso-nombre">{{ data.curso.nombre }}</span>
               <span class="curso-stats">
-                {{ data.registros.filter(r => r.estado === 'presente').length }}/{{ data.registros.length }} presentes
+                {{ data.registros.filter((r) => r.estado === 'presente').length }}/{{
+                  data.registros.length
+                }}
+                presentes
+                <strong
+                  v-if="resumenCurso(data.registros).porcentaje !== null"
+                  :class="[
+                    'curso-pct',
+                    { bajo: resumenCurso(data.registros).porcentaje < UMBRAL_PORCENTAJE },
+                  ]"
+                >
+                  · {{ resumenCurso(data.registros).porcentaje }}%
+                </strong>
               </span>
             </div>
 
@@ -162,17 +236,26 @@ const asistenciaPorCurso = computed(() => {
               >
                 <div class="registro-fecha">
                   <span class="fecha-dia">{{ parseFechaLocal(registro.fecha).getDate() }}</span>
-                  <span class="fecha-mes">{{ parseFechaLocal(registro.fecha).toLocaleDateString('es-ES', { month: 'short' }) }}</span>
+                  <span class="fecha-mes">{{
+                    parseFechaLocal(registro.fecha).toLocaleDateString('es-ES', { month: 'short' })
+                  }}</span>
                 </div>
                 <div class="registro-info">
                   <span class="registro-curso">{{ registro.horarios?.cursos?.nombre }}</span>
                   <span class="registro-horario">
-                    {{ registro.horarios?.dia_semana }} {{ registro.horarios?.hora_inicio }}
+                    {{ registro.horarios?.dia_semana }}
+                    {{ formatearHora(registro.horarios?.hora_inicio) }}
                   </span>
                 </div>
                 <div class="registro-estado">
-                  <span v-if="registro.estado === 'presente'" class="estado-badge presente">Presente</span>
-                  <span v-else-if="registro.estado === 'justificado'" class="estado-badge justificado">Justificado</span>
+                  <span v-if="registro.estado === 'presente'" class="estado-badge presente"
+                    >Presente</span
+                  >
+                  <span
+                    v-else-if="registro.estado === 'justificado'"
+                    class="estado-badge justificado"
+                    >Justificado</span
+                  >
                   <span v-else class="estado-badge ausente">Ausente</span>
                 </div>
                 <div v-if="registro.observacion" class="registro-observacion">
@@ -187,52 +270,21 @@ const asistenciaPorCurso = computed(() => {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .asistencia-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.page-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-name {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .btn-logout {
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-size: 0.8125rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -241,14 +293,15 @@ const asistenciaPorCurso = computed(() => {
 
 .page-content {
   padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .loading-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
-
 
 .welcome-section {
   margin-bottom: 1.5rem;
@@ -262,7 +315,7 @@ const asistenciaPorCurso = computed(() => {
 
 .welcome-section p {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .stats-grid {
@@ -277,61 +330,61 @@ const asistenciaPorCurso = computed(() => {
   flex-direction: column;
   align-items: center;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
 .stat-card .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 .stat-card .stat-label {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .stat-card.presente .stat-value {
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .stat-card.ausente .stat-value {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .stat-card.justificado .stat-value {
-  color: #fcd34d;
+  color: var(--warning-text);
 }
 
 .stat-card.porcentaje .stat-value {
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .empty-icon {
   width: 48px;
   height: 48px;
   margin: 0 auto 1rem;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-subtle);
 }
 
 .cursos-section h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
   margin-bottom: 1rem;
 }
 
 .curso-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.25rem;
   margin-bottom: 1rem;
@@ -343,17 +396,17 @@ const asistenciaPorCurso = computed(() => {
   align-items: center;
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .curso-nombre {
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .curso-stats {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .registros-list {
@@ -368,21 +421,21 @@ const asistenciaPorCurso = computed(() => {
   gap: 1rem;
   align-items: center;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface);
   border-radius: 8px;
   border-left: 3px solid transparent;
 }
 
 .registro-item.presente {
-  border-left-color: #10b981;
+  border-left-color: var(--success);
 }
 
 .registro-item.ausente {
-  border-left-color: #ef4444;
+  border-left-color: var(--danger);
 }
 
 .registro-item.justificado {
-  border-left-color: #eab308;
+  border-left-color: var(--warning);
 }
 
 .registro-fecha {
@@ -395,13 +448,13 @@ const asistenciaPorCurso = computed(() => {
 .fecha-dia {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   line-height: 1;
 }
 
 .fecha-mes {
   font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -414,12 +467,12 @@ const asistenciaPorCurso = computed(() => {
 .registro-curso {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #fff;
+  color: var(--text);
 }
 
 .registro-horario {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .registro-estado {
@@ -434,24 +487,24 @@ const asistenciaPorCurso = computed(() => {
 }
 
 .estado-badge.presente {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
+  background: var(--success-soft);
+  color: var(--success-text);
 }
 
 .estado-badge.ausente {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 
 .estado-badge.justificado {
-  background: rgba(234, 179, 8, 0.15);
-  color: #fcd34d;
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 
 .registro-observacion {
   grid-column: 1 / -1;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   font-style: italic;
   padding-left: 0.5rem;
 }
@@ -459,19 +512,13 @@ const asistenciaPorCurso = computed(() => {
 .ver-mas {
   text-align: center;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -479,5 +526,32 @@ const asistenciaPorCurso = computed(() => {
   .page-content {
     padding: 1rem;
   }
+}
+
+.alerta-estudiante {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.alerta-estudiante ul {
+  margin: 0.375rem 0 0.5rem 1.25rem;
+}
+
+.alerta-estudiante span {
+  color: var(--text-2);
+}
+
+.curso-pct {
+  color: var(--success-text);
+}
+
+.curso-pct.bajo {
+  color: var(--danger-text);
 }
 </style>

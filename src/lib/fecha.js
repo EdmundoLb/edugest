@@ -25,3 +25,32 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 export function diaSemanaDeFecha(fechaStr) {
   return DIAS_SEMANA[parseFechaLocal(fechaStr).getDay()]
 }
+
+// Columnas `time` llegan como "HH:MM:SS"; para mostrar alcanza con "HH:MM".
+export function formatearHora(hora) {
+  return hora ? hora.slice(0, 5) : ''
+}
+
+function aIso(y, m, d) {
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+// Primer y último día del mes (mes 1-12) como "YYYY-MM-DD".
+export function rangoDelMes(anio, mes) {
+  const ultimo = new Date(anio, mes, 0).getDate()
+  return { desde: aIso(anio, mes, 1), hasta: aIso(anio, mes, ultimo) }
+}
+
+// Todas las fechas "YYYY-MM-DD" del mes, en orden.
+export function fechasDelMes(anio, mes) {
+  const ultimo = new Date(anio, mes, 0).getDate()
+  return Array.from({ length: ultimo }, (_, i) => aIso(anio, mes, i + 1))
+}
+
+export function nombreDelMes(anio, mes) {
+  const texto = new Date(anio, mes - 1, 1).toLocaleDateString('es-ES', {
+    month: 'long',
+    year: 'numeric',
+  })
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}

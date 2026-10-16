@@ -4,6 +4,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { supabase } from './lib/supabase'
+import { useAuth } from './stores/auth'
 
 // Si la pestaña queda mucho tiempo en segundo plano, el navegador suspende
 // timers y el refresh automático de token de Supabase puede quedar a medio
@@ -19,8 +20,17 @@ document.addEventListener('visibilitychange', () => {
   }
 })
 
-const app = createApp(App)
+// La sesión y el perfil se cargan una sola vez acá, antes de montar, para que
+// las vistas puedan leer state.perfil/state.datosUsuario en su onMounted. Si
+// Supabase se cuelga (ver arriba), no bloqueamos el arranque para siempre.
+const INIT_TIMEOUT_MS = 5000
+const { initSession } = useAuth()
 
-app.use(router)
-
-app.mount('#app')
+Promise.race([
+  initSession().catch((e) => console.error('Error al iniciar sesión:', e)),
+  new Promise((resolve) => setTimeout(resolve, INIT_TIMEOUT_MS)),
+]).finally(() => {
+  const app = createApp(App)
+  app.use(router)
+  app.mount('#app')
+})

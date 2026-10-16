@@ -44,16 +44,16 @@ import { computed } from 'vue'
 const props = defineProps({
   currentPage: {
     type: Number,
-    required: true
+    required: true,
   },
   totalPages: {
     type: Number,
-    required: true
+    required: true,
   },
   maxVisible: {
     type: Number,
-    default: 5
-  }
+    default: 5,
+  },
 })
 
 defineEmits(['page-change'])
@@ -112,10 +112,10 @@ const visiblePages = computed(() => {
   min-width: 36px;
   height: 36px;
   padding: 0 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -124,14 +124,14 @@ const visiblePages = computed(() => {
 }
 
 .page-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .page-btn.active {
-  background: #004aad;
-  border-color: #004aad;
-  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
 }
 
 .page-btn:disabled {
@@ -145,7 +145,7 @@ const visiblePages = computed(() => {
 }
 
 .page-ellipsis {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-subtle);
   font-size: 0.875rem;
   padding: 0 0.25rem;
 }

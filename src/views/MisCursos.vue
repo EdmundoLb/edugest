@@ -1,14 +1,19 @@
 <script setup>
+import { formatearHora } from '@/lib/fecha'
+import { useToast } from '@/composables/useToast'
+import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
-import { formatearDias } from '@/lib/dias'
-import Spinner from '@/components/Spinner.vue'
+import { formatearDias, ordenarPorDia } from '@/lib/dias'
+import AppSpinner from '@/components/AppSpinner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
+const toast = useToast()
+
 const router = useRouter()
-const { state } = useAuth()
+const { state, esAdmin, rutaInicio } = useAuth()
 const loading = ref(true)
 const horarios = ref([])
 
@@ -29,46 +34,39 @@ async function cargarHorarios() {
     `
 
     if (state.perfil?.rol === 'admin') {
-      const { data, error } = await supabase
-        .from('horarios')
-        .select(columnas)
-        .order('dia_semana')
+      const { data, error } = await supabase.from('horarios').select(columnas)
 
       if (!error) {
-        horarios.value = data || []
+        horarios.value = ordenarPorDia(data || [])
       }
       return
     }
 
-    const { data: profesor } = await supabase
-      .from('profesores')
-      .select('id')
-      .eq('perfil_id', state.perfil?.id)
-      .single()
+    // Fila de profesores del usuario logueado, ya cargada por el store de auth.
+    const profesor = state.datosUsuario
 
     if (profesor) {
       const { data, error } = await supabase
         .from('horarios')
         .select(columnas)
         .eq('profesor_id', profesor.id)
-        .order('dia_semana')
 
       if (!error) {
-        horarios.value = data || []
+        horarios.value = ordenarPorDia(data || [])
       }
     }
   } catch (e) {
-    console.error(e)
+    toast.error('No se pudieron cargar los cursos', e)
   } finally {
     loading.value = false
   }
 }
 
-const diasActivos = computed(() => new Set(horarios.value.map(h => h.dia_semana)).size)
+const diasActivos = computed(() => new Set(horarios.value.map((h) => h.dia_semana)).size)
 
 const cursosAgrupados = computed(() => {
   const grupos = new Map()
-  horarios.value.forEach(h => {
+  horarios.value.forEach((h) => {
     if (!h.cursos) return
     const key = `${h.cursos.id}|${h.hora_inicio}|${h.hora_fin}|${h.turno}`
     if (!grupos.has(key)) {
@@ -77,7 +75,7 @@ const cursosAgrupados = computed(() => {
         horaInicio: h.hora_inicio,
         horaFin: h.hora_fin,
         turno: h.turno,
-        horarios: []
+        horarios: [],
       })
     }
     grupos.get(key).horarios.push(h)
@@ -85,7 +83,7 @@ const cursosAgrupados = computed(() => {
   return Array.from(grupos.values()).sort((a, b) => a.curso.nombre.localeCompare(b.curso.nombre))
 })
 
-const cursosUnicos = computed(() => new Set(cursosAgrupados.value.map(g => g.curso.id)).size)
+const cursosUnicos = computed(() => new Set(cursosAgrupados.value.map((g) => g.curso.id)).size)
 
 function irALlamarLista(grupo) {
   router.push({ path: '/LlamarLista', query: { curso: grupo.curso.id } })
@@ -94,23 +92,15 @@ function irALlamarLista(grupo) {
 
 <template>
   <div class="cursos-page">
-    <header class="page-header">
-      <div class="header-left">
-        <button class="btn-back" @click="router.push('/ProfesorDashboard')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="back-icon">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1>Mis Cursos</h1>
-      </div>
-      <router-link to="/ProfesorDashboard" class="btn-volver">
-        ← Volver al panel
-      </router-link>
-    </header>
+    <PageHeader
+      :titulo="esAdmin() ? 'Cursos' : 'Mis cursos'"
+      subtitulo="Horarios y días de clase"
+      :volver="rutaInicio()"
+    />
 
-    <main class="page-content">
+    <div class="page-content">
       <div v-if="loading" class="loading-state">
-        <Spinner size="large" />
+        <AppSpinner size="large" />
         <p>Cargando cursos...</p>
       </div>
 
@@ -143,26 +133,44 @@ function irALlamarLista(grupo) {
         </section>
 
         <section class="cursos-lista">
-          <h2>Mis Cursos</h2>
+          <h2>{{ esAdmin() ? 'Todos los cursos' : 'Mis cursos' }}</h2>
 
           <div class="cursos-grid">
-            <div v-for="grupo in cursosAgrupados" :key="`${grupo.curso.id}-${grupo.horaInicio}`" class="curso-card">
+            <div
+              v-for="grupo in cursosAgrupados"
+              :key="`${grupo.curso.id}-${grupo.horaInicio}`"
+              class="curso-card"
+            >
               <div class="horario-curso">
                 <span class="curso-nombre">{{ grupo.curso.nombre }}</span>
                 <span class="horario-turno">{{ grupo.turno }}</span>
               </div>
-              <p v-if="grupo.curso.descripcion" class="curso-descripcion">{{ grupo.curso.descripcion }}</p>
+              <p v-if="grupo.curso.descripcion" class="curso-descripcion">
+                {{ grupo.curso.descripcion }}
+              </p>
               <div class="dias-chips">
-                <span v-for="chip in formatearDias(grupo.horarios.map(h => h.dia_semana))" :key="chip" class="dia-chip">
+                <span
+                  v-for="chip in formatearDias(grupo.horarios.map((h) => h.dia_semana))"
+                  :key="chip"
+                  class="dia-chip"
+                >
                   {{ chip }}
                 </span>
               </div>
               <div class="horario-tiempo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="time-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="time-icon"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span>{{ grupo.horaInicio }} - {{ grupo.horaFin }}</span>
+                <span
+                  >{{ formatearHora(grupo.horaInicio) }} – {{ formatearHora(grupo.horaFin) }}</span
+                >
               </div>
               <button
                 v-if="state.perfil?.rol === 'docente'"
@@ -175,84 +183,25 @@ function irALlamarLista(grupo) {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .cursos-page {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-y: auto;
-  padding-top: 82px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #022451;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.page-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-back:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.back-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.btn-volver {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.btn-volver:hover {
-  color: #fff;
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .page-content {
   padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .loading-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .loading-state :deep(.spinner) {
@@ -262,7 +211,7 @@ function irALlamarLista(grupo) {
 .cursos-content h2 {
   font-size: 1rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
   margin-bottom: 1rem;
 }
 
@@ -279,20 +228,20 @@ function irALlamarLista(grupo) {
   display: flex;
   flex-direction: column;
   padding: 1rem 1.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
 .resumen-stat .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #004aad;
+  color: var(--primary-text);
 }
 
 .resumen-stat .stat-label {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .cursos-grid {
@@ -306,14 +255,14 @@ function irALlamarLista(grupo) {
   flex-direction: column;
   gap: 0.75rem;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
 .curso-descripcion {
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   margin: -0.5rem 0 0;
 }
 
@@ -325,11 +274,11 @@ function irALlamarLista(grupo) {
 
 .dia-chip {
   padding: 0.25rem 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-2);
 }
 
 .horario-curso {
@@ -341,12 +290,12 @@ function irALlamarLista(grupo) {
 .curso-nombre {
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .horario-turno {
   font-size: 0.75rem;
-  color: #004aad;
+  color: var(--primary-text);
   text-transform: uppercase;
   font-weight: 500;
 }
@@ -356,13 +305,13 @@ function irALlamarLista(grupo) {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-2);
 }
 
 .time-icon {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-subtle);
 }
 
 .btn-llamar {
@@ -370,7 +319,7 @@ function irALlamarLista(grupo) {
   border: none;
   border-radius: 8px;
   background: linear-gradient(135deg, #022451, #004aad);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
@@ -385,12 +334,6 @@ function irALlamarLista(grupo) {
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
   .page-content {
     padding: 1rem;
   }

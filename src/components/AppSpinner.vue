@@ -7,27 +7,27 @@ defineProps({
   size: {
     type: String,
     default: 'medium',
-    validator: (v) => ['small', 'medium', 'large'].includes(v)
+    validator: (v) => ['small', 'medium', 'large'].includes(v),
   },
   variant: {
     type: String,
     default: 'primary',
-    validator: (v) => ['primary', 'light'].includes(v)
-  }
+    validator: (v) => ['primary', 'light'].includes(v),
+  },
 })
 </script>
 
 <style scoped>
 .spinner {
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: var(--color-primary, #004aad);
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
 
 .spinner.light {
-  border-color: rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border-color: var(--border-strong);
+  border-top-color: var(--on-primary);
 }
 
 .spinner.small {

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import PaginaInicio from '@/views/PaginaInicio.vue'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/stores/auth'
+import { useAuth, RUTA_INICIO_POR_ROL } from '@/stores/auth'
 
 const { state: authState, verificarExpiracion } = useAuth()
 
@@ -66,9 +66,27 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: ['docente', 'admin'] },
     },
     {
+      path: '/Reportes/mensual',
+      name: 'reporte-mensual',
+      component: () => import('@/views/ReporteMensual.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminDashboard.vue'),
+      meta: { requiresAuth: true, rol: 'admin' },
+    },
+    {
+      path: '/admin/cursos',
+      name: 'admin-cursos',
+      component: () => import('@/views/admin/AdminCursos.vue'),
+      meta: { requiresAuth: true, rol: 'admin' },
+    },
+    {
+      path: '/admin/cursos/:id',
+      name: 'admin-curso-detalle',
+      component: () => import('@/views/admin/AdminCursoDetalle.vue'),
       meta: { requiresAuth: true, rol: 'admin' },
     },
     {
@@ -77,14 +95,18 @@ const router = createRouter({
       component: () => import('@/views/InformesAsistencia.vue'),
       meta: { requiresAuth: true, rol: 'admin' },
     },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/RestablecerContrasena.vue'),
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'no-encontrado',
+      component: () => import('@/views/NoEncontrado.vue'),
+    },
   ],
 })
-
-const rutaHomePorRol = {
-  estudiante: '/MiAsistencia',
-  docente: '/ProfesorDashboard',
-  admin: '/admin',
-}
 
 const SESSION_TIMEOUT_MS = 4000
 const TIMEOUT = Symbol('timeout')
@@ -119,7 +141,7 @@ router.beforeEach(async (to) => {
       const rolesPermitidos = Array.isArray(to.meta.rol) ? to.meta.rol : [to.meta.rol]
 
       const resultado = await conTimeout(
-        supabase.from('perfiles').select('rol').eq('user_id', session.user.id).single()
+        supabase.from('perfiles').select('rol').eq('user_id', session.user.id).single(),
       )
 
       // Si la consulta de perfil se cuelga, dejamos pasar en vez de bloquear
@@ -129,7 +151,7 @@ router.beforeEach(async (to) => {
       const perfil = resultado.data
 
       if (!perfil || !rolesPermitidos.includes(perfil.rol)) {
-        return rutaHomePorRol[perfil?.rol] ?? '/login'
+        return RUTA_INICIO_POR_ROL[perfil?.rol] ?? '/login'
       }
     }
   }

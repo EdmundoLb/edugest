@@ -11,6 +11,12 @@ const state = reactive({
 
 let authStateListenerUnsubscribe = null
 
+export const RUTA_INICIO_POR_ROL = {
+  estudiante: '/MiAsistencia',
+  docente: '/ProfesorDashboard',
+  admin: '/admin',
+}
+
 const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000 // 1 día
 const SESSION_STARTED_KEY = 'sesion_iniciada_en'
 
@@ -35,7 +41,9 @@ export function useAuth() {
     }
 
     state.loading = true
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     state.session = session
     state.user = session?.user ?? null
 
@@ -49,7 +57,9 @@ export function useAuth() {
     }
     state.loading = false
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       state.session = session
       state.user = session?.user ?? null
 
@@ -114,6 +124,10 @@ export function useAuth() {
     return data
   }
 
+  function rutaInicio() {
+    return RUTA_INICIO_POR_ROL[state.perfil?.rol] ?? '/'
+  }
+
   function getUserRole() {
     return state.perfil?.rol ?? null
   }
@@ -171,6 +185,7 @@ export function useAuth() {
     logout,
     signUp,
     getUserRole,
+    rutaInicio,
     esEstudiante,
     esDocente,
     esAdmin,

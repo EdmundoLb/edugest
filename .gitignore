@@ -40,3 +40,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Planillas con datos personales de alumnos (fuente de las migraciones de importación)
+datos_importacion/
