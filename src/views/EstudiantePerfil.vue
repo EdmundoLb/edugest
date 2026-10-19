@@ -6,12 +6,23 @@ import { useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import AppSpinner from '@/components/AppSpinner.vue'
-import { formatearFecha } from '@/lib/fecha'
+import HistorialAlumno from '@/components/HistorialAlumno.vue'
+import JustificacionesPanel from '@/components/JustificacionesPanel.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import { inscripcionesDeAlumno } from '@/lib/api/historial'
+import { darDeBaja, reactivarInscripcion } from '@/lib/api/admin'
+import { formatearFecha, hoyLocal } from '@/lib/fecha'
 
 const toast = useToast()
+const confirmar = useConfirm()
 
 const route = useRoute()
 const { esAdmin } = useAuth()
+
+const historial = ref(null)
+const inscripciones = ref([])
+const baja = ref(null) // { inscripcionId, fecha, motivo } mientras se completa el formulario
+const guardandoBaja = ref(false)
 
 const loading = ref(true)
 const error = ref('')
@@ -22,8 +33,52 @@ const telefonoPadreInput = ref('')
 const guardandoTelefonoPadre = ref(false)
 
 onMounted(async () => {
-  await cargarEstudiante()
+  await Promise.all([cargarEstudiante(), cargarInscripciones()])
 })
+
+async function cargarInscripciones() {
+  try {
+    inscripciones.value = await inscripcionesDeAlumno(route.params.id)
+  } catch (e) {
+    toast.error('No se pudieron cargar los cursos del estudiante', e)
+  }
+}
+
+function iniciarBaja(i) {
+  baja.value = { inscripcionId: i.inscripcionId, fecha: hoyLocal(), motivo: '' }
+}
+
+async function confirmarBaja(i) {
+  const ok = await confirmar({
+    titulo: `¿Dar de baja de ${i.cursoNombre}?`,
+    mensaje:
+      'Deja de aparecer al tomar lista en este curso. Su asistencia anterior se conserva en los reportes.',
+    aceptar: 'Dar de baja',
+    peligro: true,
+  })
+  if (!ok) return
+  guardandoBaja.value = true
+  try {
+    await darDeBaja(i.inscripcionId, baja.value)
+    toast.exito('Inscripción dada de baja')
+    baja.value = null
+    await cargarInscripciones()
+  } catch (e) {
+    toast.error('No se pudo dar de baja la inscripción', e)
+  } finally {
+    guardandoBaja.value = false
+  }
+}
+
+async function reactivar(i) {
+  try {
+    await reactivarInscripcion(i.inscripcionId)
+    toast.exito(`Reinscripto en ${i.cursoNombre}`)
+    await cargarInscripciones()
+  } catch (e) {
+    toast.error('No se pudo reactivar la inscripción', e)
+  }
+}
 
 async function cargarEstudiante() {
   loading.value = true
@@ -82,7 +137,7 @@ const currentState = computed(() => {
 
     <div class="profile-content">
       <transition name="fade" mode="out-in">
-        <div :key="currentState">
+        <div :key="currentState" class="profile-layout">
           <div v-if="loading" class="loading-state">
             <AppSpinner size="medium" />
             <p>Cargando perfil...</p>
@@ -225,6 +280,106 @@ const currentState = computed(() => {
               </div>
             </div>
           </div>
+
+          <template v-if="estudiante">
+            <section class="tarjeta cursos-card" aria-label="Cursos">
+              <h2>Cursos</h2>
+              <p v-if="!inscripciones.length" class="texto-muted">Sin cursos inscriptos.</p>
+              <ul v-else class="cursos-lista">
+                <li
+                  v-for="i in inscripciones"
+                  :key="i.inscripcionId"
+                  :class="['curso-item', { baja: !i.activa }]"
+                >
+                  <div class="curso-fila">
+                    <div class="curso-texto">
+                      <strong>{{ i.cursoNombre }}</strong>
+                      <span v-if="i.activa" class="badge activa">Activa</span>
+                      <span v-else class="badge de-baja">
+                        Baja<template v-if="i.fechaBaja">
+                          desde
+                          {{
+                            formatearFecha(i.fechaBaja, {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          }}</template
+                        >
+                      </span>
+                      <span v-if="!i.activa && i.motivoBaja" class="texto-muted motivo-baja">{{
+                        i.motivoBaja
+                      }}</span>
+                    </div>
+                    <template v-if="esAdmin() && i.soportaBajas">
+                      <button
+                        v-if="i.activa && baja?.inscripcionId !== i.inscripcionId"
+                        type="button"
+                        class="btn btn-peligro btn-chico"
+                        @click="iniciarBaja(i)"
+                      >
+                        Dar de baja
+                      </button>
+                      <button
+                        v-else-if="!i.activa"
+                        type="button"
+                        class="btn btn-secundario btn-chico"
+                        @click="reactivar(i)"
+                      >
+                        Reactivar
+                      </button>
+                    </template>
+                  </div>
+                  <form
+                    v-if="baja?.inscripcionId === i.inscripcionId"
+                    class="form-baja"
+                    @submit.prevent="confirmarBaja(i)"
+                  >
+                    <input
+                      v-model="baja.fecha"
+                      class="input"
+                      type="date"
+                      aria-label="Fecha de baja"
+                      required
+                    />
+                    <input
+                      v-model="baja.motivo"
+                      class="input"
+                      type="text"
+                      maxlength="200"
+                      placeholder="Motivo (opcional)"
+                      aria-label="Motivo de la baja"
+                    />
+                    <button type="button" class="btn btn-secundario btn-chico" @click="baja = null">
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn-peligro btn-chico"
+                      :disabled="guardandoBaja"
+                    >
+                      Confirmar baja
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </section>
+
+            <HistorialAlumno
+              ref="historial"
+              class="ancho-completo"
+              :alumno-id="estudiante.id"
+              :nombre-alumno="`${estudiante.nombre} ${estudiante.apellido}`"
+            />
+
+            <JustificacionesPanel
+              class="ancho-completo"
+              :alumno-id="estudiante.id"
+              :cursos="inscripciones.filter((i) => i.activa)"
+              editable
+              @cambio="historial?.recargar()"
+            />
+          </template>
         </div>
       </transition>
     </div>
@@ -238,10 +393,96 @@ const currentState = computed(() => {
 
 .profile-content {
   padding: 2rem;
-  display: flex;
-  justify-content: center;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.profile-layout > .loading-state,
+.profile-layout > .error-state,
+.ancho-completo {
+  grid-column: 1 / -1;
+}
+
+.cursos-card {
+  padding: 1.25rem;
+}
+
+.cursos-card h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.cursos-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.curso-item {
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.curso-item.baja {
+  background: var(--surface-2);
+}
+
+.curso-item.baja strong {
+  color: var(--text-muted);
+}
+
+.curso-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.curso-texto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.badge {
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.badge.activa {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.badge.de-baja {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.motivo-baja {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+}
+
+.form-baja {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .loading-state,
@@ -253,7 +494,6 @@ const currentState = computed(() => {
 
 .profile-card {
   width: 100%;
-  max-width: 480px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -433,6 +673,22 @@ const currentState = computed(() => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+@media (max-width: 900px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-content {
+    padding: 1rem;
+  }
+
+  .form-baja {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {

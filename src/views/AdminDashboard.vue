@@ -137,6 +137,12 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
                 </svg>
                 Ver Reportes
               </router-link>
+              <router-link to="/Reportes/institucional" class="action-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+                Resumen del mes
+              </router-link>
               <router-link to="/InformesAsistencia" class="action-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />

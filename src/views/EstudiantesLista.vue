@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import AppPagination from '@/components/AppPagination.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AppSpinner from '@/components/AppSpinner.vue'
+import { esEsquemaFaltante } from '@/lib/api/reportes'
 
 const toast = useToast()
 
@@ -70,10 +71,14 @@ async function cargarEstudiantes() {
 
   loadingEstudiantes.value = true
   try {
-    const { data, error } = await supabase
-      .from('inscripciones')
-      .select('alumnos (id, ci, nombre, apellido, telefono, created_at)')
-      .eq('curso_id', cursoSeleccionado.value.id)
+    const consulta = () =>
+      supabase
+        .from('inscripciones')
+        .select('alumnos (id, ci, nombre, apellido, telefono, created_at)')
+        .eq('curso_id', cursoSeleccionado.value.id)
+    // Solo inscripciones activas; sin la migración 0012 no existe la columna.
+    let { data, error } = await consulta().eq('activa', true)
+    if (error && esEsquemaFaltante(error)) ({ data, error } = await consulta())
 
     if (error) throw error
     estudiantes.value = (data || [])

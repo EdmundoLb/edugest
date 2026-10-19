@@ -54,3 +54,20 @@ export function nombreDelMes(anio, mes) {
   })
   return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
+
+// Los `n` meses que terminan en `anioMes` ("YYYY-MM"), incluido, del más
+// viejo al más nuevo. mesesAnteriores('2026-02', 3) -> ['2025-12', '2026-01', '2026-02']
+export function mesesAnteriores(anioMes, n) {
+  const [anio, mes] = anioMes.split('-').map(Number)
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(anio, mes - 1 - (n - 1 - i), 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
+// Desde el primer día de `mesDesde` hasta el último de `mesHasta` ("YYYY-MM").
+export function rangoDeMeses(mesDesde, mesHasta) {
+  const [a1, m1] = mesDesde.split('-').map(Number)
+  const [a2, m2] = mesHasta.split('-').map(Number)
+  return { desde: rangoDelMes(a1, m1).desde, hasta: rangoDelMes(a2, m2).hasta }
+}

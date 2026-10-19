@@ -72,6 +72,12 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: ['docente', 'admin'] },
     },
     {
+      path: '/Reportes/institucional',
+      name: 'reporte-institucional',
+      component: () => import('@/views/ReporteInstitucional.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminDashboard.vue'),

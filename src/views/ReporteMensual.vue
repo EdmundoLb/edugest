@@ -352,6 +352,12 @@ function imprimir() {
                 <th scope="row" class="col-alumno">
                   <span class="apellido">{{ a.apellido }}</span
                   >, {{ a.nombre }}
+                  <span
+                    v-if="a.activa === false"
+                    class="badge-baja"
+                    :title="a.fecha_baja ? `Baja desde ${formatearFecha(a.fecha_baja)}` : undefined"
+                    >baja</span
+                  >
                 </th>
                 <td
                   v-for="f in fechasConClase"
@@ -616,6 +622,15 @@ thead .col-alumno {
 
 .apellido {
   font-weight: 600;
+}
+
+.badge-baja {
+  margin-left: 0.375rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  background: var(--surface-hover);
+  color: var(--text-muted);
 }
 
 .col-dia {

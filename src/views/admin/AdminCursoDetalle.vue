@@ -5,7 +5,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import AppSpinner from '@/components/AppSpinner.vue'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { formatearHora } from '@/lib/fecha'
+import { formatearHora, formatearFecha, hoyLocal } from '@/lib/fecha'
 import { indiceDia, ordenarPorDia } from '@/lib/dias'
 import { esFuncionFaltante } from '@/lib/api/reportes'
 import { parsearCsv, filasAAlumnos } from '@/lib/csv'
@@ -25,6 +25,9 @@ import {
   alumnosPorCi,
   inscribir,
   desinscribir,
+  darDeBaja,
+  reactivarInscripcion,
+  tieneAsistenciaEnCurso,
   crearAlumno,
 } from '@/lib/api/admin'
 
@@ -238,14 +241,17 @@ async function quitarHorario(h) {
 // ---------- Alumnos ----------
 
 const filtroInscriptos = ref('')
+const mostrarBajas = ref(false)
+const activos = computed(() => inscriptos.value.filter((a) => a.activa))
+const bajas = computed(() => inscriptos.value.filter((a) => !a.activa))
 const inscriptosFiltrados = computed(() => {
   const q = filtroInscriptos.value.trim().toLowerCase()
-  if (!q) return inscriptos.value
-  return inscriptos.value.filter((a) =>
-    `${a.nombre} ${a.apellido} ${a.ci}`.toLowerCase().includes(q),
-  )
+  const base = mostrarBajas.value ? inscriptos.value : activos.value
+  if (!q) return base
+  return base.filter((a) => `${a.nombre} ${a.apellido} ${a.ci}`.toLowerCase().includes(q))
 })
-const idsInscriptos = computed(() => new Set(inscriptos.value.map((a) => a.id)))
+// Los dados de baja se pueden volver a inscribir desde la búsqueda.
+const idsInscriptos = computed(() => new Set(activos.value.map((a) => a.id)))
 
 // Buscar alumno existente
 const textoBusqueda = ref('')
@@ -281,20 +287,36 @@ async function inscribirExistente(alumno) {
   }
 }
 
+// Si el alumno ya tiene asistencia en el curso se lo da de baja (su historial
+// sigue en los reportes); si no, la inscripción fue un error y se borra.
 async function quitarAlumno(alumno) {
   const ok = await confirmar({
-    titulo: `¿Quitar a ${alumno.nombre} ${alumno.apellido} del curso?`,
-    mensaje: 'Deja de aparecer en la lista del curso. Su asistencia ya registrada se conserva.',
-    aceptar: 'Quitar del curso',
+    titulo: `¿Dar de baja a ${alumno.nombre} ${alumno.apellido} del curso?`,
+    mensaje:
+      'Deja de aparecer al tomar lista desde hoy. Su asistencia ya registrada se conserva en los reportes.',
+    aceptar: 'Dar de baja',
     peligro: true,
   })
   if (!ok) return
   try {
-    await desinscribir(alumno.inscripcionId)
+    const conHistorial =
+      alumno.soportaBajas && (await tieneAsistenciaEnCurso(alumno.id, cursoId.value))
+    if (conHistorial) await darDeBaja(alumno.inscripcionId, { fecha: hoyLocal() })
+    else await desinscribir(alumno.inscripcionId)
     await recargarInscriptos()
-    toast.exito('Alumno quitado del curso')
+    toast.exito(conHistorial ? 'Alumno dado de baja del curso' : 'Alumno quitado del curso')
   } catch (e) {
-    toast.error('No se pudo quitar al alumno', e)
+    toast.error('No se pudo dar de baja al alumno', e)
+  }
+}
+
+async function reactivarAlumno(alumno) {
+  try {
+    await reactivarInscripcion(alumno.inscripcionId)
+    await recargarInscriptos()
+    toast.exito(`${alumno.nombre} ${alumno.apellido} reinscripto`)
+  } catch (e) {
+    toast.error('No se pudo reactivar la inscripción', e)
   }
 }
 
@@ -475,7 +497,7 @@ async function confirmarImportacion() {
             :class="{ activa: pestana === 'alumnos' }"
             @click="pestana = 'alumnos'"
           >
-            Alumnos <span class="contador">{{ inscriptos.length }}</span>
+            Alumnos <span class="contador">{{ activos.length }}</span>
           </button>
         </div>
 
@@ -764,7 +786,11 @@ async function confirmarImportacion() {
 
           <div class="tarjeta bloque">
             <div class="fila-titulo">
-              <h2>Inscriptos ({{ inscriptos.length }})</h2>
+              <h2>Inscriptos ({{ activos.length }})</h2>
+              <label v-if="bajas.length" class="chico toggle-bajas">
+                <input v-model="mostrarBajas" type="checkbox" />
+                Mostrar bajas ({{ bajas.length }})
+              </label>
               <input
                 v-if="inscriptos.length > 8"
                 v-model="filtroInscriptos"
@@ -774,23 +800,41 @@ async function confirmarImportacion() {
                 aria-label="Filtrar inscriptos"
               />
             </div>
-            <p v-if="!inscriptos.length" class="texto-muted">
+            <p v-if="!inscriptosFiltrados.length && !filtroInscriptos" class="texto-muted">
               Todavía no hay alumnos en este curso.
             </p>
             <ul v-else class="inscriptos">
-              <li v-for="a in inscriptosFiltrados" :key="a.id">
+              <li v-for="a in inscriptosFiltrados" :key="a.id" :class="{ 'de-baja': !a.activa }">
                 <router-link :to="`/Estudiantes/${a.id}`" class="nombre-alumno">
                   <strong>{{ a.apellido }}</strong
                   >, {{ a.nombre }}
                 </router-link>
                 <span class="texto-muted chico">CI {{ a.ci }}</span>
-                <span v-if="!a.telefono_padre" class="sin-tel chico">Sin teléfono del padre</span>
+                <span v-if="!a.activa" class="badge-baja chico">
+                  Baja{{
+                    a.fechaBaja
+                      ? ` ${formatearFecha(a.fechaBaja, { day: 'numeric', month: 'short' })}`
+                      : ''
+                  }}
+                </span>
+                <span v-else-if="!a.telefono_padre" class="sin-tel chico"
+                  >Sin teléfono del padre</span
+                >
                 <button
+                  v-if="a.activa"
                   type="button"
                   class="btn btn-peligro btn-chico quitar"
                   @click="quitarAlumno(a)"
                 >
-                  Quitar
+                  Dar de baja
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn btn-secundario btn-chico quitar"
+                  @click="reactivarAlumno(a)"
+                >
+                  Reactivar
                 </button>
               </li>
             </ul>
@@ -1023,6 +1067,25 @@ async function confirmarImportacion() {
 
 .quitar {
   margin-left: auto;
+}
+
+.inscriptos li.de-baja .nombre-alumno {
+  color: var(--text-muted);
+}
+
+.badge-baja {
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.toggle-bajas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .fila-titulo {

@@ -10,6 +10,8 @@ import { hoyLocal, diaSemanaDeFecha, formatearFecha, formatearHora } from '@/lib
 import { formatearDias, indiceDia, ordenarPorDia } from '@/lib/dias'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { esEsquemaFaltante } from '@/lib/api/reportes'
+import { justificacionesVigentes } from '@/lib/api/justificaciones'
 
 const route = useRoute()
 const { state } = useAuth()
@@ -187,10 +189,7 @@ async function cargarAlumnos() {
   loadingAlumnos.value = true
   try {
     const [inscripciones, existente, informe] = await Promise.all([
-      supabase
-        .from('inscripciones')
-        .select('alumnos (id, nombre, apellido)')
-        .eq('curso_id', cursoId.value),
+      inscriptosEnFecha(),
       supabase
         .from('asistencia')
         .select('alumno_id, estado, observacion')
@@ -214,12 +213,29 @@ async function cargarAlumnos() {
     const previos = new Map((existente.data || []).map((r) => [r.alumno_id, r]))
     asistenciaGuardada.value = previos.size > 0
 
+    // Alumnos con una justificación vigente (certificado, permiso) para hoy.
+    const justificados = new Map(
+      (await justificacionesDelDia(alumnos.value.map((a) => a.id))).map((j) => [
+        j.alumno_id,
+        j.motivo,
+      ]),
+    )
+
     const nuevaAsistencia = {}
     const nuevasObservaciones = {}
     alumnos.value.forEach((a) => {
-      // Primera pasada de lista: todos presentes por defecto.
-      nuevaAsistencia[a.id] = previos.get(a.id)?.estado ?? 'presente'
-      nuevasObservaciones[a.id] = previos.get(a.id)?.observacion ?? ''
+      const previo = previos.get(a.id)
+      if (previo) {
+        nuevaAsistencia[a.id] = previo.estado
+        nuevasObservaciones[a.id] = previo.observacion ?? ''
+      } else if (justificados.has(a.id)) {
+        nuevaAsistencia[a.id] = 'justificado'
+        nuevasObservaciones[a.id] = `Justificado: ${justificados.get(a.id)}`
+      } else {
+        // Primera pasada de lista: todos presentes por defecto.
+        nuevaAsistencia[a.id] = 'presente'
+        nuevasObservaciones[a.id] = ''
+      }
     })
     asistencia.value = nuevaAsistencia
     observaciones.value = nuevasObservaciones
@@ -230,6 +246,30 @@ async function cargarAlumnos() {
     toast.error('No se pudieron cargar los alumnos', e)
   } finally {
     loadingAlumnos.value = false
+  }
+}
+
+// Inscriptos que corresponden a la fecha elegida: los activos, y los dados
+// de baja después de esa fecha (para poder corregir una lista vieja). Sin la
+// migración 0012 no hay bajas: se traen todos.
+async function inscriptosEnFecha() {
+  const consulta = () =>
+    supabase
+      .from('inscripciones')
+      .select('alumnos (id, nombre, apellido)')
+      .eq('curso_id', cursoId.value)
+  const respuesta = await consulta().or(`activa.eq.true,fecha_baja.gt.${fecha.value}`)
+  if (respuesta.error && esEsquemaFaltante(respuesta.error)) return consulta()
+  return respuesta
+}
+
+async function justificacionesDelDia(alumnoIds) {
+  try {
+    return await justificacionesVigentes({ alumnoIds, cursoId: cursoId.value, fecha: fecha.value })
+  } catch (e) {
+    // Sin 0012 no hay justificaciones: la lista se toma igual.
+    if (!esEsquemaFaltante(e)) toast.error('No se pudieron consultar las justificaciones', e)
+    return []
   }
 }
 

@@ -46,3 +46,11 @@ export function porcentajeAsistencia({ total, presentes, justificados }) {
 export function esFuncionFaltante(error) {
   return error?.code === 'PGRST202' || /Could not find the function/i.test(error?.message ?? '')
 }
+
+// Tabla o columna que agrega una migración todavía no aplicada (0012).
+export function esEsquemaFaltante(error) {
+  return (
+    ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error?.code) ||
+    /does not exist|Could not find the (table|.*column)/i.test(error?.message ?? '')
+  )
+}

@@ -59,6 +59,9 @@ inscripciones          -- agregada en migración 0001, no existía en el esquema
   alumno_id     uuid FK -> alumnos.id ON DELETE CASCADE
   curso_id      uuid FK -> cursos.id  ON DELETE CASCADE
   created_at    timestamptz
+  activa        boolean NOT NULL default true   -- 0012: false = dado de baja (nunca se borra si tiene asistencia)
+  fecha_baja    date                          -- 0012
+  motivo_baja   text                          -- 0012
   UNIQUE (alumno_id, curso_id)
 
 asistencia
@@ -69,7 +72,17 @@ asistencia
   estado        varchar CHECK IN ('presente','ausente','justificado')  -- reemplazó a `presente boolean` en migración 0004
   observacion   text
   created_at    timestamptz
+  justificacion_id uuid  -- 0012: justificación que la marcó; SIN FK a propósito (ver 0012)
   UNIQUE (horario_id, alumno_id, fecha)   -- agregado en migración 0001; lo necesita el upsert de LlamarLista.vue
+
+justificaciones         -- agregada en migración 0012
+  id            uuid PK
+  alumno_id     uuid FK -> alumnos.id ON DELETE CASCADE
+  curso_id      uuid FK -> cursos.id  ON DELETE CASCADE   -- null = todos los cursos del alumno
+  desde, hasta  date NOT NULL CHECK (hasta >= desde)
+  motivo        text NOT NULL
+  creado_por    uuid FK -> perfiles.id default auth.uid()
+  created_at    timestamptz
 
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
@@ -87,7 +100,13 @@ informes_asistencia     -- agregada en migración 0005
 
 `estado = 'justificado'` es una falta con justificación (ausencia no perjudica el % de asistencia). En todos los reportes (`MiAsistencia.vue`, `MisReportes.vue`) el porcentaje de asistencia se calcula como `presentes / (total - justificados)`, es decir, las faltas justificadas quedan excluidas del denominador en vez de contar como ausencia.
 
-No hay tabla de "matrícula por año/período" ni forma de dar de baja una inscripción desde la UI todavía — `inscripciones` es intencionalmente mínima.
+No hay tabla de "matrícula por año/período". Desde 0012 una inscripción se **da de baja** (`activa = false`, `fecha_baja`, `motivo_baja`) en vez de borrarse: el alumno deja de aparecer al tomar lista (`LlamarLista.vue` trae los activos y los dados de baja después de la fecha elegida), en "Alumnos" y en los contadores, pero su asistencia sigue en los reportes de los meses en que cursó (`resumen_asistencia_por_alumno` devuelve `activa`/`fecha_baja`). `alumnos_en_riesgo` ignora las bajas. Solo se borra la fila (`desinscribir`) si la inscripción fue un error y no tiene asistencia.
+
+`justificaciones` (0012) cubre faltas por rango de fechas (certificado médico, permiso). Tres triggers `SECURITY DEFINER` la mantienen sincronizada con `asistencia`:
+- `trg_justificacion_al_crear` (AFTER INSERT): las faltas `ausente` ya cargadas en el rango pasan a `justificado` con `justificacion_id`.
+- `trg_asistencia_aplicar_justificacion` (BEFORE INSERT/UPDATE en `asistencia`): una falta cargada después dentro del rango se justifica sola. Si el docente la marca `presente`, se suelta el enlace.
+- `trg_justificacion_al_anular` (AFTER DELETE): las asistencias que justificó vuelven a `ausente` (o a otra justificación vigente que las cubra). Por eso `asistencia.justificacion_id` no tiene FK: un `on delete set null` borraría el enlace antes de que este trigger lo use.
+No hay UPDATE de justificaciones: para corregir una se anula y se carga de nuevo.
 
 ## Alta de usuarios: todo pasa por un trigger, no por el frontend
 
@@ -131,6 +150,7 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **horarios**: SELECT admin / el docente dueño (`profesor_id = current_profesor_id()`) / `alumno_inscripto_en_curso(curso_id)`. Escritura solo admin (no hay UI todavía para que un docente cree sus propios horarios).
 - **inscripciones**: SELECT admin / el alumno propio / `docente_dicta_curso(curso_id)`. Escritura solo admin.
 - **asistencia**: SELECT admin / alumno propio / docente dueño del horario. INSERT/UPDATE/DELETE: docente dueño del horario, o admin.
+- **justificaciones** (0012): SELECT admin / alumno propio / `docente_tiene_alumno(alumno_id)`. INSERT con `creado_por = auth.uid()` y (admin, o docente con `curso_id` no nulo de un curso que dicta y un alumno suyo). DELETE admin o quien la creó. Sin UPDATE.
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -159,8 +179,9 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 9. `0009_gestion_cursos.sql` — función `admin_crear_alumno(...)` (`SECURITY DEFINER`, verifica `is_admin()`; crea cuenta + perfil + alumno con contraseña **aleatoria**, para el alta de alumnos desde `/admin/cursos/:id`) e índice único `horarios (curso_id, dia_semana, hora_inicio)`. Si ya hay horarios duplicados, el índice no se crea y la migración avisa con un `NOTICE` (al final del archivo está la consulta para encontrarlos).
 10. `0010_seguridad_cuentas_alumnos.sql` — reemplaza la contraseña fija `Prueba123!` de las cuentas `<ci>@alumno.ccg.local` creadas por 0003/0006/0007 por una aleatoria. Ver `docs/AUDITORIA_2026-08.md`, hallazgo 15. **Leer el encabezado antes de correrla**: si algún alumno real usa esas cuentas, deja de poder entrar.
 11. `0011_alertas_inasistencia.sql` — función `alumnos_en_riesgo(desde, hasta, umbral_pct, faltas_seguidas, minimo_clases)` para el panel "Alumnos en riesgo" de admin y docente. `SECURITY INVOKER`.
+12. `0012_justificaciones_y_bajas.sql` — bajas de inscripción (`inscripciones.activa/fecha_baja/motivo_baja`), tabla `justificaciones` con RLS y triggers, `asistencia.justificacion_id`; redefine `resumen_asistencia_por_alumno` (agrega `activa`, `fecha_baja`) y `alumnos_en_riesgo` (sin bajas). **Va después de 0008 y 0011.** Sin ella la app funciona igual: justificaciones y bajas muestran un aviso y todo lo demás cae a la consulta sin las columnas nuevas.
 
-1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 11 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
+1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 
 `horarios.dia_semana`: la restricción original acepta `'Miercoles'` sin tilde (es lo que insertaron las importaciones). La UI de administración guarda los días con esa grafía (`DIAS_SEMANA` en `src/lib/api/admin.js`) y los muestra con tilde; para comparar días se usa siempre `indiceDia()` de `src/lib/dias.js`, que ignora tildes.
 

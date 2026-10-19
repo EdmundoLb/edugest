@@ -184,6 +184,7 @@ function exportarCsv() {
       subtitulo="Totales de asistencia por curso y día"
       :volver="rutaInicio()"
     >
+      <router-link to="/Reportes/institucional" class="btn btn-secundario">Resumen del mes</router-link>
       <router-link to="/Reportes/mensual" class="btn btn-secundario">Reporte mensual</router-link>
       <button type="button" class="btn btn-primario" :disabled="!filas.length" @click="exportarCsv">
         Descargar Excel

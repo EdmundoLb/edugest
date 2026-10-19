@@ -152,6 +152,16 @@ const diasActivos = computed(() => {
             <span class="action-title">Mis Reportes</span>
             <span class="action-desc">Ver historial de reportes</span>
           </router-link>
+
+          <router-link to="/Reportes/institucional" class="action-card">
+            <div class="action-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </div>
+            <span class="action-title">Resumen del mes</span>
+            <span class="action-desc">Tus cursos comparados y su tendencia</span>
+          </router-link>
         </div>
       </div>
 

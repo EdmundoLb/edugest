@@ -6,6 +6,8 @@ import {
   rangoDelMes,
   fechasDelMes,
   diaSemanaDeFecha,
+  mesesAnteriores,
+  rangoDeMeses,
 } from './fecha'
 
 afterEach(() => vi.useRealTimers())
@@ -43,5 +45,16 @@ describe('fecha', () => {
     expect(dias).toHaveLength(30)
     expect(dias[0]).toBe('2026-09-01')
     expect(dias.at(-1)).toBe('2026-09-30')
+  })
+})
+
+describe('meses', () => {
+  it('mesesAnteriores cruza el cambio de año', () => {
+    expect(mesesAnteriores('2026-02', 3)).toEqual(['2025-12', '2026-01', '2026-02'])
+    expect(mesesAnteriores('2026-10', 1)).toEqual(['2026-10'])
+  })
+
+  it('rangoDeMeses va del primer día al último', () => {
+    expect(rangoDeMeses('2026-01', '2026-02')).toEqual({ desde: '2026-01-01', hasta: '2026-02-28' })
   })
 })
