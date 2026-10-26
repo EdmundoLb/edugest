@@ -149,7 +149,7 @@ function nivel(valor) {
 
 function exportarCsv() {
   descargarCsv(nombreArchivo('resumen institucional', mes.value), [
-    [`Centro Cultural Gymmart — Resumen de asistencia — ${tituloMes.value}`],
+    [`EduGest — Resumen de asistencia — ${tituloMes.value}`],
     [],
     [
       'Curso',
@@ -223,7 +223,7 @@ function imprimir() {
       <div class="encabezado-impresion">
         <img src="@/images/edugest-logo.png" alt="" class="logo-edugest" />
         <div>
-          <strong>Centro Cultural Gymmart</strong>
+          <strong>EduGest</strong>
           <span>Resumen de asistencia — {{ tituloMes }}</span>
         </div>
       </div>

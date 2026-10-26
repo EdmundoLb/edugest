@@ -3,7 +3,7 @@
     <div class="footer-inner">
       <div class="footer-brand">
         <img src="@/images/edugest-logo.png" alt="EduGest" class="footer-logo logo-edugest" />
-        <span>Centro Cultural Gymmart</span>
+        <span>EduGest</span>
       </div>
       <p class="footer-copy">&copy; 2026 Centro Cultural Gymmart. Todos los derechos reservados.</p>
     </div>

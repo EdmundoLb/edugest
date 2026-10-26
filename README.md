@@ -1,6 +1,6 @@
-# Sistema Académico — Centro Cultural Gymmart
+# Sistema Académico — EduGest
 
-Sistema de control de asistencia para el Centro Cultural Gymmart. Los docentes toman lista desde el celular o la computadora, la administración revisa los informes y avisa a las familias por WhatsApp, y cada estudiante puede consultar su propia asistencia.
+Sistema de control de asistencia para EduGest. Los docentes toman lista desde el celular o la computadora, la administración revisa los informes y avisa a las familias por WhatsApp, y cada estudiante puede consultar su propia asistencia.
 
 ## Funcionalidades
 

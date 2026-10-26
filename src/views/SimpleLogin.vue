@@ -111,7 +111,7 @@ function hideResetForm() {
         <div class="brand-icon">
           <img src="@/images/edugest-logo.png" alt="EduGest" class="logo-edugest" />
         </div>
-        <h1>Centro Cultural Gymmart</h1>
+        <h1>EduGest</h1>
         <p class="brand-sub">Control de Asistencia</p>
       </div>
 
@@ -394,7 +394,7 @@ function hideResetForm() {
 }
 
 .brand h1 {
-  font-size: 1.5rem;
+  font-size: 2.25rem;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;

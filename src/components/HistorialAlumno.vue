@@ -113,7 +113,7 @@ function nombreMes(mes) {
 
 function exportarCsv() {
   const filas = [
-    [`Centro Cultural Gymmart — Historial de asistencia — ${props.nombreAlumno}`],
+    [`EduGest — Historial de asistencia — ${props.nombreAlumno}`],
     [`Período: ${tituloPeriodo.value}`],
     [],
     ['Resumen por curso'],

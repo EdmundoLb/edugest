@@ -35,7 +35,7 @@ export function armarMensajeAsistencia({ alumno, curso, fecha, estado, observaci
     mensaje += ` Observación: ${observacion}.`
   }
 
-  mensaje += '\n\n— Centro Cultural Gymmart'
+  mensaje += '\n\n— EduGest'
 
   return mensaje
 }
@@ -62,14 +62,14 @@ export function armarMensajeGrupoAsistencia({ curso, fecha, ausentes, justificad
         .join('\n')
   }
 
-  mensaje += '\n\n— Centro Cultural Gymmart'
+  mensaje += '\n\n— EduGest'
 
   return mensaje
 }
 
 export function armarMensajeAlerta({ alumno, curso, porcentaje, faltasSeguidas }) {
   let mensaje =
-    `Hola, nos comunicamos del Centro Cultural Gymmart por la asistencia de ` +
+    `Hola, nos comunicamos de EduGest por la asistencia de ` +
     `${alumno.nombre} ${alumno.apellido} en ${curso}.`
 
   if (faltasSeguidas >= 2) {
@@ -81,7 +81,7 @@ export function armarMensajeAlerta({ alumno, curso, porcentaje, faltasSeguidas }
 
   mensaje +=
     ' Le pedimos que se comunique con la institución para conversar sobre la situación.' +
-    '\n\n— Centro Cultural Gymmart'
+    '\n\n— EduGest'
 
   return mensaje
 }

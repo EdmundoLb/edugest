@@ -199,7 +199,7 @@ function exportarCsv() {
     totales.value.porcentaje ?? '',
   ]
   descargarCsv(nombreArchivo('asistencia', cursoSeleccionado.value.nombre, mes.value), [
-    [`Centro Cultural Gymmart — ${cursoSeleccionado.value.nombre} — ${tituloMes.value}`],
+    [`EduGest — ${cursoSeleccionado.value.nombre} — ${tituloMes.value}`],
     ['P = presente, A = ausente, J = justificado'],
     [],
     encabezado,
@@ -255,7 +255,7 @@ function imprimir() {
       <div v-if="cursoSeleccionado" class="encabezado-impresion">
         <img src="@/images/edugest-logo.png" alt="" class="logo-edugest" />
         <div>
-          <strong>Centro Cultural Gymmart</strong>
+          <strong>EduGest</strong>
           <span>Reporte de asistencia — {{ cursoSeleccionado.nombre }} — {{ tituloMes }}</span>
         </div>
       </div>

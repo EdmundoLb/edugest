@@ -80,7 +80,7 @@ async function handleRegister() {
         <div class="brand-icon">
           <img src="@/images/edugest-logo.png" alt="EduGest" class="logo-edugest" />
         </div>
-        <h1>Centro Cultural Gymmart</h1>
+        <h1>EduGest</h1>
         <p class="brand-sub">Crea tu cuenta</p>
       </div>
 

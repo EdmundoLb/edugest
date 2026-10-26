@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Sistema Académico — attendance tracking system for "Centro Cultural Gymmart". Vue 3 SPA (Vite) with **no backend server of its own**: all data access goes straight from the browser to Supabase (Postgres + Auth) using the public anon key. There is no Node/API layer to add business logic to — validation and access control live either in the Vue components or in the Supabase database (RLS policies, triggers, constraints).
+Sistema Académico — attendance tracking system for "EduGest". Vue 3 SPA (Vite) with **no backend server of its own**: all data access goes straight from the browser to Supabase (Postgres + Auth) using the public anon key. There is no Node/API layer to add business logic to — validation and access control live either in the Vue components or in the Supabase database (RLS policies, triggers, constraints).
 
 Roles: `estudiante`, `docente`, `admin` (stored in `perfiles.rol`). See `docs/BASE_DE_DATOS.md` for the full schema and RLS design — read it before touching auth, roles, or any Supabase query, since the real security boundary lives in the database, not in this repo.
 

@@ -158,7 +158,7 @@ function getPorcentajeClass(fechaData) {
 
 function exportarCsv() {
   descargarCsv(nombreArchivo('resumen_asistencia', desde.value, hasta.value), [
-    [`Centro Cultural Gymmart — Resumen de asistencia del ${desde.value} al ${hasta.value}`],
+    [`EduGest — Resumen de asistencia del ${desde.value} al ${hasta.value}`],
     [],
     ['Curso', 'Fecha', 'Presentes', 'Ausentes', 'Justificados', 'Total', '% Asistencia'],
     ...reportesAgrupados.value.flatMap((c) =>
