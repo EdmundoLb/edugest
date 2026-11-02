@@ -69,7 +69,7 @@ asistencia
   horario_id    uuid FK -> horarios.id
   alumno_id     uuid FK -> alumnos.id
   fecha         date NOT NULL
-  estado        varchar CHECK IN ('presente','ausente','justificado')  -- reemplazó a `presente boolean` en migración 0004
+  estado        varchar CHECK IN ('presente','ausente','justificado','tarde')  -- reemplazó a `presente boolean` en 0004; 'tarde' desde 0019 (cuenta como presente)
   observacion   text
   created_at    timestamptz
   justificacion_id uuid  -- 0012: justificación que la marcó; SIN FK a propósito (ver 0012)
@@ -151,6 +151,10 @@ franjas_entrevista      -- 0018: horarios que publica un docente o admin
 
 reservas_entrevista     -- 0018: una por franja (franja_id UNIQUE)
   id, franja_id, tutor_id, alumno_id, motivo, tutor_nombre, tutor_telefono, created_at
+
+calendario_escolar      -- 0019: feriados, días sin clases, eventos y exámenes
+  id, desde, hasta (≤120 días), tipo ('feriado','sin_clases','evento','examen'), titulo,
+  curso_id (null = toda la institución), creado_por, created_at
 
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
@@ -239,6 +243,7 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **franjas_entrevista** (0018): SELECT el propio profesional / admin / familia de un alumno de ese docente o cualquier familia si es de un admin (`tutor_ve_profesional`). INSERT docente o admin, a futuro. DELETE propio o admin (avisa a la familia si estaba reservada).
 - **reservas_entrevista** (0018): SELECT la familia que reservó / el profesional (`es_profesional_de_franja`) / admin. Sin escritura por la API: `reservar_entrevista(franja, alumno, motivo)` y `cancelar_entrevista(reserva)`, que notifican a la otra parte.
 - **Alertas tempranas** (0018): `revisar_alertas_tempranas()` corre todos los días a las 11:00 UTC con `pg_cron` (job `edugest-alertas-tempranas`): 3+ faltas seguidas → familia; 5+ sin seguimiento en 7 días → docentes del curso y admins; revisión pactada para hoy → autor; entrevistas de mañana → ambas partes. Se puede correr a mano: `select public.revisar_alertas_tempranas();`. La zona horaria de los textos sale de `zona_horaria_institucion()`.
+- **calendario_escolar** (0019): SELECT cualquier `authenticated`. INSERT admin (todo) o docente (solo `evento`/`examen` de un curso que dicta). DELETE admin o el docente que lo cargó. `dia_sin_clases(fecha, curso)` lo usan `resumen_asistencia_por_fecha`, `asistencia_mensual_curso`, `resumen_asistencia_por_alumno` y `alumnos_en_riesgo` (redefinidas en 0019 con la misma firma) para no contar esos días; esas funciones también cuentan `tarde` como presente.
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -275,6 +280,7 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 16. `0016_notificaciones.sql` — notificaciones en la app (triggers + Realtime), preferencia de avisos, `avisos_enviados`, `suscripciones_push`. **Va después de 0015.**
 17. `0017_push_y_email.sql` — push y resumen semanal por email. **Correrla solo después de seguir `docs/NOTIFICACIONES.md`.**
 18. `0018_seguimiento_y_entrevistas.sql` — bitácora de seguimiento, agenda de entrevistas, alertas tempranas diarias (`pg_cron`) y `patrones_ausentismo`. **Va después de 0016.** Se puede aplicar sin 0017.
+19. `0019_calendario_y_tarde.sql` — estado `tarde`, `calendario_escolar`, `dia_sin_clases()` y redefinición de las cuatro funciones de reportes. **Va después de 0012** (y de 0018 si se aplica).
 
 1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 

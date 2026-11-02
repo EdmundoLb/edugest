@@ -6,6 +6,7 @@ import { useTema } from '@/composables/useTema'
 import { useComunicadosNoLeidos } from '@/composables/useComunicadosNoLeidos'
 import { useNotificaciones } from '@/composables/useNotificaciones'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones.vue'
+import { useListaOffline } from '@/composables/useListaOffline'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,12 +14,23 @@ const { state, logout } = useAuth()
 const { tema, alternarTema } = useTema()
 const { noLeidos, refrescar: refrescarNoLeidos } = useComunicadosNoLeidos()
 const { iniciar: iniciarNotificaciones } = useNotificaciones()
+const { sincronizar: sincronizarListas } = useListaOffline()
+
+// Listas que un docente tomó sin conexión: se mandan al volver internet y al
+// abrir la app.
+function alVolverConexion() {
+  if (state.perfil?.rol === 'docente') sincronizarListas()
+}
+watch(() => state.perfil?.rol, alVolverConexion, { immediate: true })
 
 const menuUsuarioAbierto = ref(false)
 const menuMovilAbierto = ref(false)
 
 const LINKS_POR_ROL = {
-  estudiante: [{ to: '/MiAsistencia', texto: 'Mi Asistencia' }],
+  estudiante: [
+    { to: '/MiAsistencia', texto: 'Mi Asistencia' },
+    { to: '/calendario', texto: 'Calendario' },
+  ],
   docente: [
     { to: '/ProfesorDashboard', texto: 'Panel' },
     { to: '/LlamarLista', texto: 'Llamar Lista' },
@@ -43,6 +55,7 @@ const LINKS_POR_ROL = {
     { to: '/familia', texto: 'Mis hijos' },
     { to: '/familia/comunicados', texto: 'Comunicados', contador: true },
     { to: '/familia/entrevistas', texto: 'Entrevistas' },
+    { to: '/calendario', texto: 'Calendario' },
     { to: '/familia/vincular', texto: 'Vincular alumno' },
   ],
 }
@@ -109,11 +122,13 @@ function cerrarConEscape(e) {
 onMounted(() => {
   document.addEventListener('click', cerrarMenuExterno)
   document.addEventListener('keydown', cerrarConEscape)
+  window.addEventListener('online', alVolverConexion)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', cerrarMenuExterno)
   document.removeEventListener('keydown', cerrarConEscape)
+  window.removeEventListener('online', alVolverConexion)
 })
 
 async function handleLogout() {

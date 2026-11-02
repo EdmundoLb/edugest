@@ -21,7 +21,12 @@ const { state } = useAuth()
 const toast = useToast()
 const { noLeidos } = useComunicadosNoLeidos()
 
-const ESTADOS = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
+const ESTADOS = {
+  presente: 'Presente',
+  ausente: 'Ausente',
+  justificado: 'Justificado',
+  tarde: 'Llegó tarde',
+}
 
 const hoy = hoyLocal()
 const [anio, mes] = hoy.split('-').map(Number)
@@ -382,6 +387,11 @@ async function guardarTelefono() {
 .estado.ausente {
   background: var(--danger-soft);
   color: var(--danger-text);
+}
+
+.estado.tarde {
+  background: var(--primary-soft);
+  color: var(--primary-text);
 }
 
 .estado.justificado {

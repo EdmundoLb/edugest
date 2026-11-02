@@ -36,7 +36,12 @@ const emit = defineEmits(['cargado'])
 const toast = useToast()
 
 const POR_PAGINA = 15
-const ESTADOS = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
+const ESTADOS = {
+  presente: 'Presente',
+  ausente: 'Ausente',
+  justificado: 'Justificado',
+  tarde: 'Tarde',
+}
 
 const mesActual = hoyLocal().slice(0, 7)
 const mesDesde = ref(mesesAnteriores(mesActual, 6)[0])
@@ -77,6 +82,13 @@ const tituloPeriodo = computed(() => {
 })
 
 watch([() => props.alumnoId, mesDesde, mesHasta], () => cargar(), { immediate: true })
+
+// Constancia imprimible del mismo período (sin pasar de hoy).
+const linkConstancia = computed(() => {
+  const { desde, hasta } = rangoDeMeses(mesDesde.value, mesHasta.value)
+  const tope = hoyLocal()
+  return `/constancia/${props.alumnoId}?desde=${desde}&hasta=${hasta > tope ? tope : hasta}`
+})
 watch([filtroCurso, filtroEstado], () => (pagina.value = 1))
 
 async function cargar() {
@@ -185,6 +197,9 @@ defineExpose({ recargar: cargar })
         >
           Imprimir / PDF
         </button>
+        <router-link :to="linkConstancia" class="btn btn-secundario btn-chico">
+          Constancia
+        </router-link>
       </div>
     </div>
 
@@ -668,6 +683,10 @@ td.justificado {
   border-left-color: var(--danger);
 }
 
+.registro.tarde {
+  border-left-color: var(--primary);
+}
+
 .registro.justificado {
   border-left-color: var(--warning);
 }
@@ -729,6 +748,11 @@ td.justificado {
 .estado-badge.ausente {
   background: var(--danger-soft);
   color: var(--danger-text);
+}
+
+.estado-badge.tarde {
+  background: var(--primary-soft);
+  color: var(--primary-text);
 }
 
 .estado-badge.justificado {

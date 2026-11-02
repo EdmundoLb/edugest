@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import PaginaInicio from '@/views/PaginaInicio.vue'
 import { supabase } from '@/lib/supabase'
 import { useAuth, RUTA_INICIO_POR_ROL } from '@/stores/auth'
+import { esErrorDeRed } from '@/lib/listaOffline'
 
 const { state: authState, verificarExpiracion, logout } = useAuth()
 
@@ -120,6 +121,18 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: ['docente', 'admin'] },
     },
     {
+      path: '/calendario',
+      name: 'calendario',
+      component: () => import('@/views/CalendarioEscolar.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/constancia/:id',
+      name: 'constancia',
+      component: () => import('@/views/ConstanciaAsistencia.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/entrevistas',
       name: 'entrevistas',
       component: () => import('@/views/entrevistas/EntrevistasAgenda.vue'),
@@ -214,7 +227,11 @@ router.beforeEach(async (to) => {
       // la navegación para siempre: RLS igual protege los datos reales.
       if (resultado === TIMEOUT) return
 
-      const perfil = resultado.data
+      // Sin conexión: se decide con el perfil que quedó guardado (RLS igual
+      // protege los datos cuando vuelva la red).
+      const perfil =
+        resultado.error && esErrorDeRed(resultado.error) ? authState.perfil : resultado.data
+      if (!perfil && resultado.error && esErrorDeRed(resultado.error)) return
 
       // Cuenta sin aprobar: RLS no le muestra nada, mejor explicarlo en el login.
       if (perfil?.activo === false) {

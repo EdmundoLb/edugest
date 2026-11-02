@@ -3,12 +3,13 @@
 //
 // Regla del sistema (la misma que las funciones SQL de 0008/0011):
 //   - si un curso tiene dos horarios el mismo día, ese día cuenta una vez,
-//     con prioridad ausente > justificado > presente;
+//     con prioridad ausente > justificado > tarde > presente;
+//   - 'tarde' (llegó tarde, 0019) cuenta como presente;
 //   - porcentaje = presentes / (total - justificados).
 
 import { porcentajeAsistencia } from '@/lib/api/reportes'
 
-const PRIORIDAD = { ausente: 3, justificado: 2, presente: 1 }
+const PRIORIDAD = { ausente: 4, justificado: 3, tarde: 2, presente: 1 }
 
 // Fila de `asistencia` con `horarios (dia_semana, hora_inicio, cursos (id, nombre))`
 // -> objeto plano.
@@ -49,10 +50,13 @@ export function combinarPorDia(registros) {
 }
 
 export function contar(dias) {
-  const t = { total: dias.length, presentes: 0, ausentes: 0, justificados: 0 }
+  const t = { total: dias.length, presentes: 0, ausentes: 0, justificados: 0, tardes: 0 }
   for (const d of dias) {
     if (d.estado === 'presente') t.presentes++
-    else if (d.estado === 'ausente') t.ausentes++
+    else if (d.estado === 'tarde') {
+      t.presentes++
+      t.tardes++
+    } else if (d.estado === 'ausente') t.ausentes++
     else if (d.estado === 'justificado') t.justificados++
   }
   return { ...t, porcentaje: porcentajeAsistencia(t) }

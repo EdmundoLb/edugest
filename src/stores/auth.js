@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase'
 import { reactive } from 'vue'
+import {
+  esErrorDeRed,
+  leerPerfilCache,
+  guardarPerfilCache,
+  borrarPerfilCache,
+} from '@/lib/listaOffline'
 
 const state = reactive({
   user: null,
@@ -97,11 +103,21 @@ export function useAuth() {
   async function cargarPerfil() {
     if (!state.user) return
 
-    const { data: perfil } = await supabase
+    const { data: perfil, error } = await supabase
       .from('perfiles')
       .select('*')
       .eq('user_id', state.user.id)
       .single()
+
+    // Sin conexión: se usa la última copia para poder tomar lista offline.
+    if (error && esErrorDeRed(error)) {
+      const copia = leerPerfilCache(state.user.id)
+      if (copia) {
+        state.perfil = copia.perfil
+        state.datosUsuario = copia.datosUsuario
+      }
+      return
+    }
 
     state.perfil = perfil
 
@@ -121,6 +137,7 @@ export function useAuth() {
           .single()
         state.datosUsuario = profesor
       }
+      guardarPerfilCache(state.user.id, perfil, state.datosUsuario)
     }
   }
 
@@ -159,6 +176,7 @@ export function useAuth() {
   }
 
   async function logout() {
+    if (state.user) borrarPerfilCache(state.user.id)
     state.session = null
     state.user = null
     state.perfil = null

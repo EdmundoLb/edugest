@@ -73,7 +73,12 @@ function formatFecha(fecha) {
   return formatearFecha(fecha, { day: 'numeric', month: 'short' })
 }
 
-const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
+const ESTADO_LABEL = {
+  presente: 'Presente',
+  ausente: 'Ausente',
+  justificado: 'Justificado',
+  tarde: 'Tarde',
+}
 </script>
 
 <template>
@@ -148,6 +153,15 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
                 Resumen del mes
+              </router-link>
+              <router-link to="/calendario" class="action-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                Calendario escolar
               </router-link>
               <router-link to="/InformesAsistencia" class="action-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -347,6 +361,11 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
 .recent-status.ausente {
   color: var(--danger-text);
   background: var(--danger-soft);
+}
+
+.recent-status.tarde {
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .recent-status.justificado {

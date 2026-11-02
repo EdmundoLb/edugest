@@ -9,6 +9,7 @@ const ESTADO_TEXTO = {
   presente: 'presente',
   ausente: 'ausente',
   justificado: 'ausente con justificación',
+  tarde: 'presente (llegó tarde)',
 }
 
 export function normalizarTelefono(telefono) {

@@ -110,6 +110,7 @@ as $$
       case
         when bool_or(a.estado = 'ausente') then 'ausente'
         when bool_or(a.estado = 'justificado') then 'justificado'
+        when bool_or(a.estado = 'tarde') then 'tarde'
         else 'presente'
       end as estado
     from public.asistencia a
@@ -124,7 +125,7 @@ as $$
     al.id,
     (al.nombre || ' ' || al.apellido)::text,
     count(d.fecha),
-    count(d.fecha) filter (where d.estado = 'presente'),
+    count(d.fecha) filter (where d.estado in ('presente', 'tarde')),
     count(d.fecha) filter (where d.estado = 'ausente'),
     count(d.fecha) filter (where d.estado = 'justificado')
   from public.tutores_alumnos ta

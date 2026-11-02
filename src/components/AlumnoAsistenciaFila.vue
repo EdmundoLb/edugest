@@ -14,6 +14,7 @@ const observacion = defineModel('observacion', { type: String, default: '' })
 const OPCIONES = [
   { valor: 'presente', texto: 'Presente', corto: 'P' },
   { valor: 'ausente', texto: 'Ausente', corto: 'A' },
+  { valor: 'tarde', texto: 'Tarde', corto: 'T' },
   { valor: 'justificado', texto: 'Justificado', corto: 'J' },
 ]
 </script>
@@ -84,6 +85,10 @@ const OPCIONES = [
 
 .fila.justificado {
   border-left-color: var(--warning);
+}
+
+.fila.tarde {
+  border-left-color: var(--primary);
 }
 
 .alumno {
@@ -170,6 +175,12 @@ const OPCIONES = [
   background: var(--danger-soft);
   border-color: var(--danger-border);
   color: var(--danger-text);
+}
+
+.opcion.tarde.activa {
+  background: var(--primary-soft-strong);
+  border-color: var(--primary);
+  color: var(--primary-text);
 }
 
 .opcion.justificado.activa {

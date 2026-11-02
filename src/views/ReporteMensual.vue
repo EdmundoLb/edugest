@@ -78,7 +78,7 @@ const porcentajePorDia = computed(() =>
       .filter((r) => r.fecha === f)
       .forEach((r) => {
         t.total++
-        if (r.estado === 'presente') t.presentes++
+        if (r.estado === 'presente' || r.estado === 'tarde') t.presentes++
         if (r.estado === 'justificado') t.justificados++
       })
     return porcentajeAsistencia(t)
@@ -92,7 +92,7 @@ const variacion = computed(() => {
   return totales.value.porcentaje - porcentajeMesAnterior.value
 })
 
-const LETRA = { presente: 'P', ausente: 'A', justificado: 'J' }
+const LETRA = { presente: 'P', ausente: 'A', justificado: 'J', tarde: 'T' }
 
 onMounted(async () => {
   try {
@@ -200,7 +200,7 @@ function exportarCsv() {
   ]
   descargarCsv(nombreArchivo('asistencia', cursoSeleccionado.value.nombre, mes.value), [
     [`EduGest — ${cursoSeleccionado.value.nombre} — ${tituloMes.value}`],
-    ['P = presente, A = ausente, J = justificado'],
+    ['P = presente, T = llegó tarde (cuenta como presente), A = ausente, J = justificado'],
     [],
     encabezado,
     ...cuerpo,
@@ -397,6 +397,7 @@ function imprimir() {
 
         <p class="leyenda">
           <span class="chip presente">P</span> presente <span class="chip ausente">A</span> ausente
+          <span class="chip tarde">T</span> tarde (cuenta como presente)
           <span class="chip justificado">J</span> justificado <span class="chip">·</span> sin
           registro · <span class="obs-marca">*</span> tiene observación (pasá el mouse para verla) ·
           % = presentes / (clases − justificadas). Filas resaltadas: menos de {{ UMBRAL_RIESGO }}%.
@@ -667,6 +668,11 @@ thead .col-alumno {
   background: var(--danger-soft);
 }
 
+.celda.tarde {
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
 .celda.justificado {
   color: var(--warning-text);
   background: var(--warning-soft);
@@ -723,6 +729,11 @@ tfoot td {
 .chip.ausente {
   color: var(--danger-text);
   background: var(--danger-soft);
+}
+
+.chip.tarde {
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .chip.justificado {

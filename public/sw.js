@@ -1,11 +1,61 @@
-// Service worker de EduGest: hace la app instalable y muestra las
-// notificaciones push (las manda la Edge Function enviar-push, ver
-// docs/NOTIFICACIONES.md). No cachea nada: la app sigue necesitando
-// conexión como hasta ahora.
+// Service worker de EduGest:
+// - hace la app instalable y muestra las notificaciones push (las manda la
+//   Edge Function enviar-push, ver docs/NOTIFICACIONES.md);
+// - guarda una copia de la app (HTML, JS, CSS, íconos) para que abra sin
+//   conexión y el docente pueda tomar lista offline. Los datos de Supabase
+//   NO se cachean acá: la app guarda su propia copia mínima (src/lib/listaOffline.js).
+
+const CACHE = 'edugest-app-v1'
 
 self.addEventListener('install', () => self.skipWaiting())
 
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((claves) => Promise.all(claves.filter((c) => c !== CACHE).map((c) => caches.delete(c))))
+      .then(() => self.clients.claim()),
+  )
+})
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request
+  const url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return
+
+  // Páginas: primero la red (siempre la versión nueva); sin red, la última
+  // copia de la app (es una SPA: cualquier ruta sirve con index.html).
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((resp) => {
+          const copia = resp.clone()
+          caches.open(CACHE).then((c) => c.put('/index.html', copia))
+          return resp
+        })
+        .catch(() => caches.match('/index.html')),
+    )
+    return
+  }
+
+  // Archivos de la build (con hash en el nombre, no cambian) e íconos:
+  // primero la copia, si no la red.
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')) {
+    event.respondWith(
+      caches.match(req).then(
+        (guardada) =>
+          guardada ||
+          fetch(req).then((resp) => {
+            if (resp.ok) {
+              const copia = resp.clone()
+              caches.open(CACHE).then((c) => c.put(req, copia))
+            }
+            return resp
+          }),
+      ),
+    )
+  }
+})
 
 self.addEventListener('push', (event) => {
   let datos

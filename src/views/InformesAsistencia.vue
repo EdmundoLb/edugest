@@ -31,7 +31,12 @@ const detalleAlumnos = ref([])
 const cargandoDetalle = ref(false)
 const marcandoRevisado = ref(false)
 
-const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
+const ESTADO_LABEL = {
+  presente: 'Presente',
+  ausente: 'Ausente',
+  justificado: 'Justificado',
+  tarde: 'Tarde',
+}
 
 onMounted(async () => {
   await cargarInformes()
@@ -487,6 +492,11 @@ async function marcarRevisado(informe) {
 .detalle-status.ausente {
   color: var(--danger-text);
   background: var(--danger-soft);
+}
+
+.detalle-status.tarde {
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .detalle-status.justificado {

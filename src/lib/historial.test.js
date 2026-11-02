@@ -60,6 +60,19 @@ describe('combinarPorDia', () => {
     ])
   })
 
+  it('tarde le gana a presente pero no a ausente', () => {
+    const dias = combinarPorDia([
+      reg('2026-10-05', 'presente'),
+      reg('2026-10-05', 'tarde'),
+      reg('2026-10-06', 'tarde'),
+      reg('2026-10-06', 'ausente'),
+    ])
+    expect(dias.map((d) => [d.fecha, d.estado])).toEqual([
+      ['2026-10-06', 'ausente'],
+      ['2026-10-05', 'tarde'],
+    ])
+  })
+
   it('no mezcla cursos distintos el mismo día', () => {
     expect(
       combinarPorDia([reg('2026-10-05', 'presente', 'c1'), reg('2026-10-05', 'ausente', 'c2')]),
@@ -84,7 +97,19 @@ describe('contar y faltasSeguidas', () => {
       reg('3', 'ausente'),
       reg('4', 'justificado'),
     ])
-    expect(t).toEqual({ total: 4, presentes: 2, ausentes: 1, justificados: 1, porcentaje: 67 })
+    expect(t).toEqual({
+      total: 4,
+      presentes: 2,
+      ausentes: 1,
+      justificados: 1,
+      tardes: 0,
+      porcentaje: 67,
+    })
+  })
+
+  it('llegar tarde cuenta como presente', () => {
+    const t = contar([reg('1', 'tarde'), reg('2', 'presente'), reg('3', 'ausente')])
+    expect(t).toMatchObject({ total: 3, presentes: 2, tardes: 1, porcentaje: 67 })
   })
 
   it('la racha se corta con cualquier día que no sea ausente', () => {
