@@ -5,6 +5,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import { formatearFecha } from '@/lib/fecha'
+import { registrarAvisoEnviado } from '@/lib/api/notificaciones'
 import {
   linkWhatsapp,
   armarMensajeAsistencia,
@@ -107,6 +108,13 @@ async function toggleExpandir(informe) {
   } finally {
     cargandoDetalle.value = false
   }
+}
+
+// Deja constancia del aviso (0016); si falla, el link de WhatsApp sigue igual.
+function registrarAviso(alumno) {
+  registrarAvisoEnviado({ alumnoId: alumno.id, motivo: 'asistencia' }).catch((e) =>
+    console.error(e),
+  )
 }
 
 function waLink(alumno) {
@@ -283,6 +291,7 @@ async function marcarRevisado(informe) {
                       target="_blank"
                       rel="noopener"
                       class="btn-whatsapp"
+                      @click="registrarAviso(alumno)"
                     >
                       Enviar por WhatsApp
                     </a>

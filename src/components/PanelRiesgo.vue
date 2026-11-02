@@ -13,6 +13,8 @@ import {
   FALTAS_SEGUIDAS,
 } from '@/lib/api/alertas'
 import { linkWhatsapp, armarMensajeAlerta } from '@/lib/whatsapp'
+import { registrarAvisoEnviado, ultimosAvisos } from '@/lib/api/notificaciones'
+import { tiempoRelativo } from '@/lib/notificaciones'
 
 const props = defineProps({
   // El admin manda los avisos a las familias; el docente solo ve la lista.
@@ -25,6 +27,7 @@ const filas = ref([])
 const faltaMigracion = ref(false)
 const error = ref(false)
 const verTodos = ref(false)
+const avisados = ref(new Map()) // alumnoId -> último aviso por WhatsApp (0016)
 
 const visibles = computed(() => (verTodos.value ? filas.value : filas.value.slice(0, props.limite)))
 
@@ -37,6 +40,7 @@ function hace30Dias() {
 onMounted(async () => {
   try {
     filas.value = await alumnosEnRiesgo({ desde: hace30Dias(), hasta: hoyLocal() })
+    if (props.conAvisos) cargarAvisados()
   } catch (e) {
     if (esFuncionFaltante(e)) faltaMigracion.value = true
     else {
@@ -47,6 +51,26 @@ onMounted(async () => {
     cargando.value = false
   }
 })
+
+async function cargarAvisados() {
+  try {
+    avisados.value = await ultimosAvisos([...new Set(filas.value.map((f) => f.alumno_id))])
+  } catch (e) {
+    // Sin 0016 no hay registro de avisos: se muestra la lista igual.
+    console.error(e)
+  }
+}
+
+// Abrir el link no garantiza que se haya mandado, pero deja constancia de
+// que se intentó avisar (antes no quedaba ningún registro).
+async function registrarAviso(f) {
+  avisados.value = new Map(avisados.value).set(f.alumno_id, new Date().toISOString())
+  try {
+    await registrarAvisoEnviado({ alumnoId: f.alumno_id, motivo: 'alerta' })
+  } catch (e) {
+    console.error(e)
+  }
+}
 
 function linkAviso(f) {
   return linkWhatsapp(
@@ -107,9 +131,13 @@ function linkAviso(f) {
               target="_blank"
               rel="noopener"
               class="btn btn-secundario btn-chico whatsapp"
+              @click="registrarAviso(f)"
             >
               Avisar al padre
             </a>
+            <span v-if="avisados.get(f.alumno_id)" class="avisado">
+              Avisado {{ tiempoRelativo(avisados.get(f.alumno_id)) }}
+            </span>
             <span v-else class="sin-tel">Sin teléfono</span>
           </template>
         </li>
@@ -127,6 +155,12 @@ function linkAviso(f) {
 </template>
 
 <style scoped>
+.avisado {
+  font-size: 0.75rem;
+  color: var(--success-text);
+  white-space: nowrap;
+}
+
 .panel-riesgo {
   padding: 1.25rem;
 }

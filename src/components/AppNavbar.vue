@@ -4,12 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { useTema } from '@/composables/useTema'
 import { useComunicadosNoLeidos } from '@/composables/useComunicadosNoLeidos'
+import { useNotificaciones } from '@/composables/useNotificaciones'
+import CampanaNotificaciones from '@/components/CampanaNotificaciones.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { state, logout } = useAuth()
 const { tema, alternarTema } = useTema()
 const { noLeidos, refrescar: refrescarNoLeidos } = useComunicadosNoLeidos()
+const { iniciar: iniciarNotificaciones } = useNotificaciones()
 
 const menuUsuarioAbierto = ref(false)
 const menuMovilAbierto = ref(false)
@@ -78,6 +81,9 @@ const iniciales = computed(() =>
 // Comunicados sin leer de la familia (badge en el link).
 watch(() => state.perfil?.id, refrescarNoLeidos, { immediate: true })
 
+// Campanita: carga las notificaciones y se suscribe a las nuevas (Realtime).
+watch(() => state.perfil?.id, iniciarNotificaciones, { immediate: true })
+
 watch(
   () => route.fullPath,
   () => {
@@ -136,6 +142,7 @@ async function handleLogout() {
       </div>
 
       <div class="nav-actions">
+        <CampanaNotificaciones v-if="sesionActiva && state.perfil" />
         <button
           type="button"
           class="icon-btn"

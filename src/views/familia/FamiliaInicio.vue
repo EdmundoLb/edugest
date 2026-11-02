@@ -9,6 +9,8 @@ import { useAuth } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useComunicadosNoLeidos } from '@/composables/useComunicadosNoLeidos'
 import { listarHijos, actualizarTelefono, esEsquemaFaltante } from '@/lib/api/familias'
+import { configurarAvisos } from '@/lib/api/notificaciones'
+import ActivarPush from '@/components/ActivarPush.vue'
 import { asistenciaDeAlumno } from '@/lib/api/historial'
 import { UMBRAL_PORCENTAJE, FALTAS_SEGUIDAS } from '@/lib/api/alertas'
 import { normalizarRegistro, combinarPorDia } from '@/lib/historial'
@@ -67,6 +69,22 @@ function necesitaAtencion(r) {
     r.faltasSeguidas >= FALTAS_SEGUIDAS ||
     (r.total >= 3 && r.porcentaje !== null && r.porcentaje < UMBRAL_PORCENTAJE)
   )
+}
+
+async function cambiarAvisos(h, recibe) {
+  const anterior = h.recibeAvisos
+  h.recibeAvisos = recibe
+  try {
+    await configurarAvisos(h.vinculoId, recibe)
+    toast.exito(
+      recibe
+        ? `Te vamos a avisar cada falta de ${h.nombre}`
+        : `Ya no te avisamos cada falta de ${h.nombre}`,
+    )
+  } catch (e) {
+    h.recibeAvisos = anterior
+    toast.error('No se pudo guardar la preferencia', e)
+  }
 }
 
 async function guardarTelefono() {
@@ -182,6 +200,15 @@ async function guardarTelefono() {
             </p>
           </template>
 
+          <label class="aviso-faltas">
+            <input
+              type="checkbox"
+              :checked="h.recibeAvisos"
+              @change="cambiarAvisos(h, $event.target.checked)"
+            />
+            Avisarme cada vez que falte
+          </label>
+
           <router-link :to="`/familia/hijo/${h.id}`" class="btn btn-secundario btn-chico ver">
             Ver historial completo
           </router-link>
@@ -211,6 +238,7 @@ async function guardarTelefono() {
             {{ guardandoTelefono ? 'Guardando...' : 'Guardar' }}
           </button>
         </form>
+        <ActivarPush class="push" />
       </section>
     </div>
   </div>
@@ -397,6 +425,21 @@ async function guardarTelefono() {
   border-radius: var(--radius-sm);
   background: var(--warning-soft);
   font-size: 0.8125rem;
+}
+
+.aviso-faltas {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.push {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
 }
 
 .ver {

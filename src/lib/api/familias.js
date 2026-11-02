@@ -23,7 +23,7 @@ export async function listarHijos(tutorId) {
   const filas = resultado(
     await supabase
       .from('tutores_alumnos')
-      .select('id, parentesco, principal, alumnos (id, nombre, apellido)')
+      .select('id, parentesco, principal, recibe_avisos, alumnos (id, nombre, apellido)')
       .eq('tutor_id', tutorId),
   )
   return filas
@@ -32,6 +32,7 @@ export async function listarHijos(tutorId) {
       vinculoId: f.id,
       parentesco: f.parentesco,
       principal: f.principal,
+      recibeAvisos: f.recibe_avisos,
       ...f.alumnos,
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))

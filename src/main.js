@@ -20,6 +20,14 @@ document.addEventListener('visibilitychange', () => {
   }
 })
 
+// Service worker: hace la app instalable en el celular y recibe las
+// notificaciones push (public/sw.js). Si falla, la app funciona igual.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((e) => console.error('Service worker:', e))
+  })
+}
+
 // La sesión y el perfil se cargan una sola vez acá, antes de montar, para que
 // las vistas puedan leer state.perfil/state.datosUsuario en su onMounted. Si
 // Supabase se cuelga (ver arriba), no bloqueamos el arranque para siempre.
