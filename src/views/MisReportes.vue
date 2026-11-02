@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import AppSpinner from '@/components/AppSpinner.vue'
+import StatCard from '@/components/StatCard.vue'
 import { useAuth } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { supabase } from '@/lib/supabase'
@@ -224,26 +225,35 @@ function exportarCsv() {
 
       <div v-else class="reportes-content">
         <div class="stats-summary">
-          <div class="stat-card">
-            <span class="stat-value">{{ estadisticasGenerales.total }}</span>
-            <span class="stat-label">Total registros</span>
-          </div>
-          <div class="stat-card presente">
-            <span class="stat-value">{{ estadisticasGenerales.presentes }}</span>
-            <span class="stat-label">Presentes</span>
-          </div>
-          <div class="stat-card ausente">
-            <span class="stat-value">{{ estadisticasGenerales.ausentes }}</span>
-            <span class="stat-label">Ausentes</span>
-          </div>
-          <div class="stat-card justificado">
-            <span class="stat-value">{{ estadisticasGenerales.justificados }}</span>
-            <span class="stat-label">Justificados</span>
-          </div>
-          <div class="stat-card porcentaje">
-            <span class="stat-value">{{ estadisticasGenerales.porcentaje }}%</span>
-            <span class="stat-label">Tasa asistencia</span>
-          </div>
+          <StatCard
+            :value="estadisticasGenerales.total"
+            label="Total registros"
+            icono="documento"
+          />
+          <StatCard
+            :value="estadisticasGenerales.presentes"
+            label="Presentes"
+            icono="check-circulo"
+            variant="presente"
+          />
+          <StatCard
+            :value="estadisticasGenerales.ausentes"
+            label="Ausentes"
+            icono="cerrar"
+            variant="ausente"
+          />
+          <StatCard
+            :value="estadisticasGenerales.justificados"
+            label="Justificados"
+            icono="documento"
+            variant="alerta"
+          />
+          <StatCard
+            :value="`${estadisticasGenerales.porcentaje}%`"
+            label="Tasa de asistencia"
+            icono="actividad"
+            variant="porcentaje"
+          />
         </div>
 
         <div v-if="filas.length === 0" class="empty-state">
@@ -319,46 +329,9 @@ function exportarCsv() {
 
 .stats-summary {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.stat-card .stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.stat-card .stat-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.stat-card.presente .stat-value {
-  color: var(--success-text);
-}
-
-.stat-card.ausente .stat-value {
-  color: var(--danger-text);
-}
-
-.stat-card.justificado .stat-value {
-  color: var(--warning-text);
-}
-
-.stat-card.porcentaje .stat-value {
-  color: var(--primary-text);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-8);
 }
 
 .empty-state {

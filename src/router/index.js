@@ -179,6 +179,10 @@ const router = createRouter({
       name: 'reset-password',
       component: () => import('@/views/RestablecerContrasena.vue'),
     },
+    // Catálogo del Design System: solo en desarrollo (Vite lo saca del build).
+    ...(import.meta.env.DEV
+      ? [{ path: '/ui', name: 'catalogo-ui', component: () => import('@/views/CatalogoUI.vue') }]
+      : []),
     {
       path: '/:pathMatch(.*)*',
       name: 'no-encontrado',
