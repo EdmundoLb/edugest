@@ -1,20 +1,39 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import AppSpinner from '@/components/AppSpinner.vue'
+import { normalizarCodigo, codigoValido, formatearCodigo } from '@/lib/vinculacion'
+
+const route = useRoute()
+
+// El link que la institución manda por WhatsApp trae ?codigo=XXXXXXXX.
+const codigoInicial = normalizarCodigo(route.query.codigo)
 
 const nombre = ref('')
 const apellido = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const rol = ref('estudiante')
+const rol = ref(codigoInicial ? 'tutor' : 'estudiante')
+const codigo = ref(formatearCodigo(codigoInicial))
 const ci = ref('')
 const telefono = ref('')
 const especialidad = ref('')
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
+
+const esTutor = computed(() => rol.value === 'tutor')
+const mensajeExito = computed(() => {
+  if (rol.value === 'docente') {
+    return '¡Cuenta creada! Revisá tu correo para verificarla. Un administrador tiene que aprobarla antes de que puedas ingresar.'
+  }
+  if (esTutor.value) {
+    return '¡Cuenta creada! Revisá tu correo para verificarla y después ingresá para ver la asistencia de tus hijos.'
+  }
+  return '¡Cuenta creada! Revisa tu correo para verificar tu cuenta.'
+})
 
 async function handleRegister() {
   error.value = ''
@@ -24,7 +43,7 @@ async function handleRegister() {
     !email.value ||
     !password.value ||
     !confirmPassword.value ||
-    !ci.value
+    (!esTutor.value && !ci.value)
   ) {
     error.value = 'Por favor completa todos los campos obligatorios'
     return
@@ -35,6 +54,11 @@ async function handleRegister() {
   }
   if (password.value.length < 6) {
     error.value = 'La contraseña debe tener al menos 6 caracteres'
+    return
+  }
+  if (esTutor.value && codigo.value && !codigoValido(codigo.value)) {
+    error.value =
+      'El código de vinculación tiene 8 caracteres (ej: ABCD-EF23). Revisalo o dejalo vacío.'
     return
   }
 
@@ -50,9 +74,10 @@ async function handleRegister() {
           nombre: nombre.value,
           apellido: apellido.value,
           rol: rol.value,
-          ci: ci.value,
+          ci: esTutor.value ? null : ci.value,
           telefono: telefono.value || null,
           especialidad: rol.value === 'docente' ? especialidad.value || null : null,
+          codigo_vinculacion: esTutor.value ? normalizarCodigo(codigo.value) || null : null,
         },
       },
     })
@@ -96,11 +121,63 @@ async function handleRegister() {
             <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
-          <span>¡Cuenta creada! Revisa tu correo para verificar tu cuenta.</span>
+          <span>{{ mensajeExito }}</span>
         </div>
       </transition>
 
       <form v-if="!success" @submit.prevent="handleRegister" class="register-form">
+        <div class="field">
+          <label for="rol">Tipo de cuenta</label>
+          <div class="input-wrapper">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+            </svg>
+            <select id="rol" v-model="rol" :disabled="loading" class="rol-select">
+              <option value="estudiante">Estudiante</option>
+              <option value="tutor">Padre, madre o tutor</option>
+              <option value="docente">Docente</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" v-if="esTutor">
+          <label for="codigo">Código de vinculación (opcional)</label>
+          <div class="input-wrapper">
+            <svg
+              class="input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"
+              />
+            </svg>
+            <input
+              id="codigo"
+              v-model="codigo"
+              type="text"
+              placeholder="ABCD-EF23"
+              autocomplete="off"
+              autocapitalize="characters"
+              :disabled="loading"
+            />
+          </div>
+          <span class="field-hint"
+            >Te lo da la institución. Si no lo tenés ahora, lo podés cargar después de
+            ingresar.</span
+          >
+        </div>
+
         <div class="field">
           <label for="nombre">Nombre</label>
           <div class="input-wrapper">
@@ -149,7 +226,7 @@ async function handleRegister() {
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" v-if="!esTutor">
           <label for="ci">Cédula de identidad</label>
           <div class="input-wrapper">
             <svg
@@ -293,27 +370,6 @@ async function handleRegister() {
               autocomplete="new-password"
               :disabled="loading"
             />
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="rol">Tipo de cuenta</label>
-          <div class="input-wrapper">
-            <svg
-              class="input-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-            </svg>
-            <select id="rol" v-model="rol" :disabled="loading" class="rol-select">
-              <option value="estudiante">Estudiante</option>
-              <option value="docente">Docente</option>
-            </select>
           </div>
         </div>
 
@@ -534,6 +590,11 @@ async function handleRegister() {
 .field input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
 }
 
 .rol-select {

@@ -67,6 +67,18 @@ export function armarMensajeGrupoAsistencia({ curso, fecha, ausentes, justificad
   return mensaje
 }
 
+// Código para que la familia se registre en el portal y vea la asistencia.
+export function armarMensajeCodigoVinculacion({ alumno, codigo, vence, link }) {
+  const venceTexto = formatearFecha(vence, { day: 'numeric', month: 'long' })
+  return (
+    `Hola, desde EduGest le compartimos el acceso al portal de familias para seguir ` +
+    `la asistencia de ${alumno.nombre} ${alumno.apellido}.\n\n` +
+    `1. Cree su cuenta en ${link}\n` +
+    `2. Elija "Padre, madre o tutor" e ingrese el código *${codigo}*\n\n` +
+    `El código es de un solo uso y vence el ${venceTexto}.\n\n— EduGest`
+  )
+}
+
 export function armarMensajeAlerta({ alumno, curso, porcentaje, faltasSeguidas }) {
   let mensaje =
     `Hola, nos comunicamos de EduGest por la asistencia de ` +

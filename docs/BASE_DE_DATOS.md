@@ -84,6 +84,24 @@ justificaciones         -- agregada en migración 0012
   creado_por    uuid FK -> perfiles.id default auth.uid()
   created_at    timestamptz
 
+tutores_alumnos         -- agregada en migración 0013 (portal de familias)
+  id            uuid PK
+  tutor_id      uuid FK -> perfiles.id ON DELETE CASCADE   -- perfil con rol 'tutor'
+  alumno_id     uuid FK -> alumnos.id  ON DELETE CASCADE
+  parentesco    text
+  principal     boolean default false   -- el primero que se vincula; su teléfono va a alumnos.telefono_padre
+  recibe_avisos boolean default true    -- reservado para notificaciones (Fase 4)
+  created_at    timestamptz
+  UNIQUE (tutor_id, alumno_id)
+
+codigos_vinculacion     -- 0013: código de un solo uso que el admin le da a la familia
+  codigo        text PK   -- 8 caracteres sin I/O/0/1
+  alumno_id     uuid FK -> alumnos.id ON DELETE CASCADE
+  creado_por    uuid FK -> perfiles.id
+  created_at, expira_at (14 días), usado_por, usado_at
+
+intentos_vinculacion    -- 0013: para limitar canjes fallidos (10 por hora); sin políticas, solo la usa vincular_tutor()
+
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
   horario_id    uuid FK -> horarios.id
@@ -115,7 +133,8 @@ No hay UPDATE de justificaciones: para corregir una se anula y se carga de nuevo
 Un trigger `on_auth_user_created` (`AFTER INSERT ON auth.users`) ejecuta `public.handle_new_user()` (`SECURITY DEFINER`), que:
 1. Lee `rol`, `nombre`, `apellido`, `ci`, `telefono`, `especialidad` de `raw_user_meta_data` (con defaults razonables si faltan — `rol` default `'estudiante'`, `ci` genera un placeholder `PENDIENTE-XXXXXXXX` si no vino).
 2. Inserta la fila en `perfiles` (`id = auth.users.id`).
-3. Si `rol = 'estudiante'`, inserta en `alumnos`. Si `rol = 'docente'`, inserta en `profesores`. Si `rol = 'admin'`, no inserta nada más (no hay flujo de alta pública para admin; se promueve a mano, ver más abajo).
+3. Si `rol = 'estudiante'`, inserta en `alumnos`. Si `rol = 'docente'`, inserta en `profesores` y el perfil queda con `activo = false` hasta que un admin lo apruebe (desde 0013). Si `rol = 'tutor'`, solo crea el perfil y, si vino `codigo_vinculacion` en la metadata, lo canjea (un código inválido no impide crear la cuenta).
+4. **Desde 0013 solo acepta `estudiante`, `docente` y `tutor`**; cualquier otro valor (incluido `admin`) queda como `estudiante`. Antes de 0013 cualquiera podía crearse una cuenta admin llamando a `signUp` con `rol: 'admin'`. Admin se promueve a mano, ver más abajo.
 
 **Si algún día se toca este flujo**: no dupliques el insert desde el cliente. Si hace falta cambiar qué datos junta el registro, se cambia `options.data` en `RegistroUsuarios.vue` **y** la función `handle_new_user` (están en `supabase/migrations/0001_rls_y_estructura.sql`, sección 6) — tienen que ir sincronizados.
 
@@ -138,6 +157,10 @@ Funciones helper (`public`, todas `SECURITY DEFINER stable`):
 | `docente_dicta_curso(curso_id)` | `true` si el docente logueado tiene un horario en ese curso |
 | `alumno_inscripto_en_curso(curso_id)` | `true` si el alumno logueado está inscripto en ese curso |
 | `docente_tiene_alumno(alumno_id)` | `true` si ese alumno está inscripto en algún curso que dicta el docente logueado |
+| `tutor_de_alumno(alumno_id)` | (0013) `true` si el tutor logueado (activo) está vinculado a ese alumno |
+| `tutor_ve_curso(curso_id)` | (0013) `true` si algún hijo del tutor logueado está inscripto en ese curso |
+
+Desde 0013, `is_admin()`, `current_profesor_id()` y `current_alumno_id()` dan `false`/`null` si `perfiles.activo` es `false`: una cuenta inactiva no ve nada.
 
 **Regla para el futuro**: si agregás o cambiás una policy y necesitás consultar OTRA tabla protegida por RLS (no `perfiles`/`alumnos`/`profesores` vía las funciones que ya existen), escribí una función `SECURITY DEFINER` nueva en vez de un subquery `exists (select ... from esa_tabla ...)` directo en el `using`/`with_check`. Si dos tablas terminan consultándose una a la otra (aunque sea indirectamente, a través de una tercera), va a recursionar.
 
@@ -151,6 +174,10 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **inscripciones**: SELECT admin / el alumno propio / `docente_dicta_curso(curso_id)`. Escritura solo admin.
 - **asistencia**: SELECT admin / alumno propio / docente dueño del horario. INSERT/UPDATE/DELETE: docente dueño del horario, o admin.
 - **justificaciones** (0012): SELECT admin / alumno propio / `docente_tiene_alumno(alumno_id)`. INSERT con `creado_por = auth.uid()` y (admin, o docente con `curso_id` no nulo de un curso que dicta y un alumno suyo). DELETE admin o quien la creó. Sin UPDATE.
+- **Tutor (0013)**: las políticas SELECT de `alumnos`, `inscripciones`, `asistencia` y `justificaciones` suman `tutor_de_alumno(alumno_id)`, y la de `horarios` suma `tutor_ve_curso(curso_id)`. El tutor no escribe en ninguna de esas tablas.
+- **tutores_alumnos** (0013): SELECT el propio tutor / admin / `docente_tiene_alumno(alumno_id)`. INSERT/UPDATE solo admin (la familia se vincula con la RPC `vincular_tutor`). DELETE admin o el propio tutor.
+- **codigos_vinculacion** (0013): SELECT/DELETE solo admin; se crean con la RPC `generar_codigo_vinculacion` (verifica `is_admin()`).
+- **alumnos, columnas protegidas** (0013): el trigger `trg_proteger_columnas_alumno` revierte cambios a `perfil_id`, `ci`, `nombre`, `apellido`, `telefono_padre` e `historial_academico` cuando el UPDATE viene de la API (`current_user = 'authenticated'`) y no es admin. Las funciones `SECURITY DEFINER` y el SQL Editor sí pueden.
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -181,6 +208,7 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 11. `0011_alertas_inasistencia.sql` — función `alumnos_en_riesgo(desde, hasta, umbral_pct, faltas_seguidas, minimo_clases)` para el panel "Alumnos en riesgo" de admin y docente. `SECURITY INVOKER`.
 12. `0012_justificaciones_y_bajas.sql` — bajas de inscripción (`inscripciones.activa/fecha_baja/motivo_baja`), tabla `justificaciones` con RLS y triggers, `asistencia.justificacion_id`; redefine `resumen_asistencia_por_alumno` (agrega `activa`, `fecha_baja`) y `alumnos_en_riesgo` (sin bajas). **Va después de 0008 y 0011.** Sin ella la app funciona igual: justificaciones y bajas muestran un aviso y todo lo demás cae a la consulta sin las columnas nuevas.
 
+13. `0013_portal_familias.sql` — rol `tutor`, `tutores_alumnos`, `codigos_vinculacion`, RPCs `generar_codigo_vinculacion`, `vincular_tutor` y `tutores_de_alumno`, cláusulas de lectura del tutor en las políticas, sincronización del teléfono del tutor principal con `alumnos.telefono_padre`; además endurece `handle_new_user` (sin alta de admin, docentes pendientes de aprobación), hace efectivo `perfiles.activo` y protege columnas de `alumnos`. **Va después de 0012.**
 1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 
 `horarios.dia_semana`: la restricción original acepta `'Miercoles'` sin tilde (es lo que insertaron las importaciones). La UI de administración guarda los días con esa grafía (`DIAS_SEMANA` en `src/lib/api/admin.js`) y los muestra con tilde; para comparar días se usa siempre `indiceDia()` de `src/lib/dias.js`, que ignora tildes.

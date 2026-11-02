@@ -3,7 +3,7 @@ import PaginaInicio from '@/views/PaginaInicio.vue'
 import { supabase } from '@/lib/supabase'
 import { useAuth, RUTA_INICIO_POR_ROL } from '@/stores/auth'
 
-const { state: authState, verificarExpiracion } = useAuth()
+const { state: authState, verificarExpiracion, logout } = useAuth()
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -102,6 +102,24 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: 'admin' },
     },
     {
+      path: '/familia',
+      name: 'familia',
+      component: () => import('@/views/familia/FamiliaInicio.vue'),
+      meta: { requiresAuth: true, rol: 'tutor' },
+    },
+    {
+      path: '/familia/vincular',
+      name: 'familia-vincular',
+      component: () => import('@/views/familia/FamiliaVincular.vue'),
+      meta: { requiresAuth: true, rol: 'tutor' },
+    },
+    {
+      path: '/familia/hijo/:id',
+      name: 'familia-hijo',
+      component: () => import('@/views/familia/FamiliaHijo.vue'),
+      meta: { requiresAuth: true, rol: 'tutor' },
+    },
+    {
       path: '/reset-password',
       name: 'reset-password',
       component: () => import('@/views/RestablecerContrasena.vue'),
@@ -147,7 +165,7 @@ router.beforeEach(async (to) => {
       const rolesPermitidos = Array.isArray(to.meta.rol) ? to.meta.rol : [to.meta.rol]
 
       const resultado = await conTimeout(
-        supabase.from('perfiles').select('rol').eq('user_id', session.user.id).single(),
+        supabase.from('perfiles').select('rol, activo').eq('user_id', session.user.id).single(),
       )
 
       // Si la consulta de perfil se cuelga, dejamos pasar en vez de bloquear
@@ -155,6 +173,12 @@ router.beforeEach(async (to) => {
       if (resultado === TIMEOUT) return
 
       const perfil = resultado.data
+
+      // Cuenta sin aprobar: RLS no le muestra nada, mejor explicarlo en el login.
+      if (perfil?.activo === false) {
+        await logout()
+        return { path: '/login', query: { pendiente: '1' } }
+      }
 
       if (!perfil || !rolesPermitidos.includes(perfil.rol)) {
         return RUTA_INICIO_POR_ROL[perfil?.rol] ?? '/login'

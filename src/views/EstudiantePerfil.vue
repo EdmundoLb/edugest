@@ -8,6 +8,7 @@ import { useAuth } from '@/stores/auth'
 import AppSpinner from '@/components/AppSpinner.vue'
 import HistorialAlumno from '@/components/HistorialAlumno.vue'
 import JustificacionesPanel from '@/components/JustificacionesPanel.vue'
+import FamiliaAlumnoPanel from '@/components/FamiliaAlumnoPanel.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { inscripcionesDeAlumno } from '@/lib/api/historial'
 import { darDeBaja, reactivarInscripcion } from '@/lib/api/admin'
@@ -95,6 +96,16 @@ async function cargarEstudiante() {
   } finally {
     loading.value = false
   }
+}
+
+// Al desvincular al tutor principal, la base puede cambiar telefono_padre.
+async function recargarTelefonoPadre() {
+  const { data } = await supabase
+    .from('alumnos')
+    .select('telefono_padre')
+    .eq('id', estudiante.value.id)
+    .maybeSingle()
+  if (data) estudiante.value.telefono_padre = data.telefono_padre
 }
 
 function editarTelefonoPadre() {
@@ -364,6 +375,12 @@ const currentState = computed(() => {
                 </li>
               </ul>
             </section>
+
+            <FamiliaAlumnoPanel
+              class="ancho-completo"
+              :alumno="estudiante"
+              @cambio="recargarTelefonoPadre"
+            />
 
             <HistorialAlumno
               ref="historial"

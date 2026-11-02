@@ -28,9 +28,18 @@ const LINKS_POR_ROL = {
     { to: '/Reportes/mensual', texto: 'Reportes' },
     { to: '/InformesAsistencia', texto: 'Informes' },
   ],
+  tutor: [
+    { to: '/familia', texto: 'Mis hijos' },
+    { to: '/familia/vincular', texto: 'Vincular alumno' },
+  ],
 }
 
-const ROL_TEXTO = { estudiante: 'Estudiante', docente: 'Docente', admin: 'Administración' }
+const ROL_TEXTO = {
+  estudiante: 'Estudiante',
+  docente: 'Docente',
+  admin: 'Administración',
+  tutor: 'Familia',
+}
 
 const sesionActiva = computed(() => state.session !== null)
 const links = computed(() => LINKS_POR_ROL[state.perfil?.rol] ?? [])

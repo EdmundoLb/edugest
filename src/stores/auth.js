@@ -15,7 +15,13 @@ export const RUTA_INICIO_POR_ROL = {
   estudiante: '/MiAsistencia',
   docente: '/ProfesorDashboard',
   admin: '/admin',
+  tutor: '/familia',
 }
+
+// Mensaje para una cuenta con perfiles.activo = false (ej. docente que se
+// registró solo y espera aprobación). RLS ya no le muestra nada.
+export const MENSAJE_CUENTA_PENDIENTE =
+  'Tu cuenta todavía no fue aprobada por la administración. Te avisamos cuando esté habilitada.'
 
 const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000 // 1 día
 const SESSION_STARTED_KEY = 'sesion_iniciada_en'
@@ -144,6 +150,14 @@ export function useAuth() {
     return state.perfil?.rol === 'admin'
   }
 
+  function esTutor() {
+    return state.perfil?.rol === 'tutor'
+  }
+
+  function cuentaPendiente() {
+    return state.perfil?.activo === false
+  }
+
   async function logout() {
     state.session = null
     state.user = null
@@ -189,6 +203,8 @@ export function useAuth() {
     esEstudiante,
     esDocente,
     esAdmin,
+    esTutor,
+    cuentaPendiente,
     cargarPerfil,
     cleanup,
     verificarExpiracion,

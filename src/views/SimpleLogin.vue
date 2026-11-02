@@ -1,17 +1,19 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuth } from '@/stores/auth'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuth, MENSAJE_CUENTA_PENDIENTE } from '@/stores/auth'
 import { supabase } from '@/lib/supabase'
 import AppSpinner from '@/components/AppSpinner.vue'
 
+const route = useRoute()
 const router = useRouter()
-const { state, login, cargarPerfil } = useAuth()
+const { state, login, logout, cargarPerfil } = useAuth()
 
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
-const error = ref('')
+// El guard del router redirige acá con ?pendiente=1 a una cuenta sin aprobar.
+const error = ref(route.query.pendiente ? MENSAJE_CUENTA_PENDIENTE : '')
 const resetSuccess = ref(false)
 const resetEmail = ref('')
 const showResetForm = ref(false)
@@ -36,6 +38,12 @@ async function handleLogin() {
       return
     }
 
+    if (perfil.activo === false) {
+      await logout()
+      error.value = MENSAJE_CUENTA_PENDIENTE
+      return
+    }
+
     if (perfil.rol === 'estudiante') {
       if (state.datosUsuario) {
         router.push('/MiAsistencia')
@@ -50,6 +58,8 @@ async function handleLogin() {
       }
     } else if (perfil.rol === 'admin') {
       router.push('/admin')
+    } else if (perfil.rol === 'tutor') {
+      router.push('/familia')
     } else {
       error.value = 'Rol no reconocido'
     }

@@ -8,6 +8,7 @@ import {
   diaSemanaDeFecha,
   mesesAnteriores,
   rangoDeMeses,
+  fechaLocalDeTimestamp,
 } from './fecha'
 
 afterEach(() => vi.useRealTimers())
@@ -56,5 +57,10 @@ describe('meses', () => {
 
   it('rangoDeMeses va del primer día al último', () => {
     expect(rangoDeMeses('2026-01', '2026-02')).toEqual({ desde: '2026-01-01', hasta: '2026-02-28' })
+  })
+
+  it('fechaLocalDeTimestamp usa la zona del navegador', () => {
+    const local = new Date(2026, 10, 15, 23, 30)
+    expect(fechaLocalDeTimestamp(local.toISOString())).toBe('2026-11-15')
   })
 })

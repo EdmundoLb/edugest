@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { normalizarTelefono, linkWhatsapp, armarMensajeAlerta } from './whatsapp'
+import {
+  normalizarTelefono,
+  linkWhatsapp,
+  armarMensajeAlerta,
+  armarMensajeCodigoVinculacion,
+} from './whatsapp'
 
 describe('whatsapp', () => {
   it('normalizarTelefono deja solo dígitos', () => {
@@ -24,5 +29,18 @@ describe('whatsapp', () => {
     expect(m).toContain('Ana Pérez')
     expect(m).toContain('3 faltas seguidas')
     expect(m).toContain('62%')
+  })
+
+  it('armarMensajeCodigoVinculacion incluye alumno, link, código y vencimiento', () => {
+    const m = armarMensajeCodigoVinculacion({
+      alumno: { nombre: 'Ana', apellido: 'Pérez' },
+      codigo: 'ABCD-EF23',
+      vence: '2026-11-15',
+      link: 'https://edugest.app/Registro?codigo=ABCDEF23',
+    })
+    expect(m).toContain('Ana Pérez')
+    expect(m).toContain('https://edugest.app/Registro?codigo=ABCDEF23')
+    expect(m).toContain('*ABCD-EF23*')
+    expect(m).toContain('15 de noviembre')
   })
 })

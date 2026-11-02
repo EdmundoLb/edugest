@@ -11,6 +11,13 @@ export function hoyLocal() {
   return `${y}-${m}-${dia}`
 }
 
+// Columnas `timestamptz` (ej. "2026-11-15T03:00:00+00:00") -> "YYYY-MM-DD" en
+// la zona del navegador. Para timestamps sí corresponde `new Date(...)`.
+export function fechaLocalDeTimestamp(timestamp) {
+  const d = new Date(timestamp)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function parseFechaLocal(fechaStr) {
   const [y, m, dia] = fechaStr.split('-').map(Number)
   return new Date(y, m - 1, dia)
