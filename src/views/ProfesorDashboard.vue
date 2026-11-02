@@ -1,5 +1,6 @@
 <script setup>
 import PanelRiesgo from '@/components/PanelRiesgo.vue'
+import AvisoSolicitudes from '@/components/AvisoSolicitudes.vue'
 import { formatearHora } from '@/lib/fecha'
 import { useToast } from '@/composables/useToast'
 import PageHeader from '@/components/PageHeader.vue'
@@ -164,6 +165,8 @@ const diasActivos = computed(() => {
           </router-link>
         </div>
       </div>
+
+      <AvisoSolicitudes class="aviso-solicitudes" />
 
       <PanelRiesgo class="panel-riesgo" />
 
@@ -431,6 +434,10 @@ const diasActivos = computed(() => {
   .actions-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.aviso-solicitudes {
+  margin-top: 1.5rem;
 }
 
 .panel-riesgo {

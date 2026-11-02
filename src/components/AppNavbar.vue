@@ -20,6 +20,7 @@ const LINKS_POR_ROL = {
     { to: '/MisCursos', texto: 'Mis Cursos' },
     { to: '/Estudiantes', texto: 'Alumnos' },
     { to: '/Reportes/mensual', texto: 'Reportes' },
+    { to: '/solicitudes', texto: 'Familias' },
   ],
   admin: [
     { to: '/admin', texto: 'Panel' },
@@ -27,6 +28,7 @@ const LINKS_POR_ROL = {
     { to: '/Estudiantes', texto: 'Alumnos' },
     { to: '/Reportes/mensual', texto: 'Reportes' },
     { to: '/InformesAsistencia', texto: 'Informes' },
+    { to: '/solicitudes', texto: 'Familias' },
   ],
   tutor: [
     { to: '/familia', texto: 'Mis hijos' },

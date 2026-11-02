@@ -4,6 +4,8 @@
 defineProps({
   alumno: { type: Object, required: true },
   deshabilitado: { type: Boolean, default: false },
+  // Motivo de un aviso pendiente de la familia para esta fecha (0014).
+  aviso: { type: String, default: '' },
 })
 
 const estado = defineModel('estado', { type: String, default: 'presente' })
@@ -23,6 +25,9 @@ const OPCIONES = [
       <span class="nombre">
         <strong>{{ alumno.apellido }}</strong
         >, {{ alumno.nombre }}
+        <span v-if="aviso" class="aviso-familia" :title="aviso"
+          >Aviso de la familia: {{ aviso }}</span
+        >
       </span>
     </div>
 
@@ -110,6 +115,16 @@ const OPCIONES = [
 
 .nombre strong {
   font-weight: 600;
+}
+
+.aviso-familia {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--warning-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .opciones {

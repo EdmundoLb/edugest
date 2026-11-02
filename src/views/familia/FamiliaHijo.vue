@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import HistorialAlumno from '@/components/HistorialAlumno.vue'
 import JustificacionesPanel from '@/components/JustificacionesPanel.vue'
+import SolicitudesFamiliaPanel from '@/components/SolicitudesFamiliaPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AppSpinner from '@/components/AppSpinner.vue'
 import { supabase } from '@/lib/supabase'
@@ -79,6 +80,12 @@ async function cargar(id) {
           >
         </div>
 
+        <SolicitudesFamiliaPanel
+          :alumno-id="alumno.id"
+          :nombre-alumno="alumno.nombre"
+          class="solicitudes"
+        />
+
         <HistorialAlumno
           :alumno-id="alumno.id"
           :nombre-alumno="nombreAlumno"
@@ -119,6 +126,10 @@ async function cargar(id) {
 
 .alerta span {
   color: var(--text-2);
+}
+
+.solicitudes {
+  margin-bottom: 1.5rem;
 }
 
 .justificaciones {

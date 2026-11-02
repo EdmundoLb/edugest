@@ -1,6 +1,7 @@
 <script setup>
 import PanelRiesgo from '@/components/PanelRiesgo.vue'
 import CuentasPendientes from '@/components/CuentasPendientes.vue'
+import AvisoSolicitudes from '@/components/AvisoSolicitudes.vue'
 import { useToast } from '@/composables/useToast'
 import PageHeader from '@/components/PageHeader.vue'
 import { ref, onMounted } from 'vue'
@@ -110,6 +111,8 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
         </div>
 
         <CuentasPendientes class="cuentas-pendientes" />
+
+        <AvisoSolicitudes class="aviso-solicitudes" />
 
         <PanelRiesgo con-avisos class="panel-riesgo" />
 
@@ -365,7 +368,8 @@ const ESTADO_LABEL = { presente: 'Presente', ausente: 'Ausente', justificado: 'J
   }
 }
 
-.cuentas-pendientes {
+.cuentas-pendientes,
+.aviso-solicitudes {
   margin-top: 1.5rem;
 }
 

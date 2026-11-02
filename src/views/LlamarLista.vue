@@ -12,6 +12,8 @@ import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { esEsquemaFaltante } from '@/lib/api/reportes'
 import { justificacionesVigentes } from '@/lib/api/justificaciones'
+import { solicitudesPendientesEnFecha } from '@/lib/api/solicitudes'
+import { avisosDelDia } from '@/lib/solicitudes'
 
 const route = useRoute()
 const { state } = useAuth()
@@ -27,6 +29,7 @@ const horarios = ref([])
 const cursoId = ref(null)
 const fecha = ref(hoyLocal())
 const alumnos = ref([])
+const avisos = ref(new Map()) // alumnoId -> motivo del aviso pendiente de la familia
 const asistencia = ref({})
 const observaciones = ref({})
 const asistenciaGuardada = ref(false)
@@ -221,6 +224,8 @@ async function cargarAlumnos() {
       ]),
     )
 
+    avisos.value = await avisosFamiliaDelDia(alumnos.value.map((a) => a.id))
+
     const nuevaAsistencia = {}
     const nuevasObservaciones = {}
     alumnos.value.forEach((a) => {
@@ -270,6 +275,18 @@ async function justificacionesDelDia(alumnoIds) {
     // Sin 0012 no hay justificaciones: la lista se toma igual.
     if (!esEsquemaFaltante(e)) toast.error('No se pudieron consultar las justificaciones', e)
     return []
+  }
+}
+
+// Avisos de la familia todavía sin aprobar para esta fecha (si ya se aprobaron
+// son justificaciones y premarcan 'justificado'). Sin 0014: ninguno.
+async function avisosFamiliaDelDia(alumnoIds) {
+  try {
+    const pendientes = await solicitudesPendientesEnFecha({ alumnoIds, fecha: fecha.value })
+    return avisosDelDia(pendientes, { fecha: fecha.value, cursoId: cursoId.value })
+  } catch (e) {
+    if (!esEsquemaFaltante(e)) console.error(e)
+    return new Map()
   }
 }
 
@@ -472,6 +489,7 @@ function marcarTodos(estado) {
               v-model:estado="asistencia[alumno.id]"
               v-model:observacion="observaciones[alumno.id]"
               :alumno="alumno"
+              :aviso="avisos.get(alumno.id) ?? ''"
               :deshabilitado="guardando"
             />
             <p v-if="alumnosFiltrados.length === 0" class="sin-resultados">

@@ -102,6 +102,19 @@ codigos_vinculacion     -- 0013: código de un solo uso que el admin le da a la 
 
 intentos_vinculacion    -- 0013: para limitar canjes fallidos (10 por hora); sin políticas, solo la usa vincular_tutor()
 
+solicitudes_justificacion  -- 0014: aviso de ausencia / pedido de justificación de la familia
+  id            uuid PK
+  alumno_id     uuid FK -> alumnos.id ON DELETE CASCADE
+  curso_id      uuid FK -> cursos.id   -- null = todos sus cursos (solo la resuelve admin)
+  desde, hasta  date (máx. 60 días de rango; ±60 días de hoy al crearla)
+  motivo        text (3–500)
+  adjunto_path  text   -- objeto en el bucket privado `certificados`, ruta <alumno_id>/<id>.<ext>
+  estado        text CHECK IN ('pendiente','aprobada','rechazada','cancelada')
+  respuesta     text   -- de la institución (obligatoria al rechazar)
+  creada_por    uuid FK -> perfiles.id default auth.uid()
+  created_at, revisada_por, revisada_at
+  justificacion_id uuid  -- la justificación que creó al aprobarse (sin FK)
+
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
   horario_id    uuid FK -> horarios.id
@@ -178,6 +191,8 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **tutores_alumnos** (0013): SELECT el propio tutor / admin / `docente_tiene_alumno(alumno_id)`. INSERT/UPDATE solo admin (la familia se vincula con la RPC `vincular_tutor`). DELETE admin o el propio tutor.
 - **codigos_vinculacion** (0013): SELECT/DELETE solo admin; se crean con la RPC `generar_codigo_vinculacion` (verifica `is_admin()`).
 - **alumnos, columnas protegidas** (0013): el trigger `trg_proteger_columnas_alumno` revierte cambios a `perfil_id`, `ci`, `nombre`, `apellido`, `telefono_padre` e `historial_academico` cuando el UPDATE viene de la API (`current_user = 'authenticated'`) y no es admin. Las funciones `SECURITY DEFINER` y el SQL Editor sí pueden.
+- **solicitudes_justificacion** (0014): SELECT admin / `tutor_de_alumno` / `docente_tiene_alumno`. INSERT solo el tutor del alumno, en estado `pendiente`, con curso en el que esté inscripto (`inscripcion_activa`) o null, y adjunto dentro de la carpeta del alumno. UPDATE solo para cancelar una pendiente propia (el trigger `trg_solicitud_solo_cancelar` rechaza cambios a otras columnas). Se aprueba/rechaza con la RPC `resolver_solicitud(id, aprobar, respuesta)` (`SECURITY DEFINER`): admin, o docente que dicta ese curso; al aprobar inserta en `justificaciones` y los triggers de 0012 hacen el resto.
+- **storage.objects, bucket `certificados`** (0014, privado, 5 MB, PDF/JPG/PNG/WEBP): INSERT el tutor del alumno de la carpeta (`alumno_de_ruta(name)`); SELECT admin / tutor / docente del alumno. Se leen con URLs firmadas de 5 minutos.
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -209,6 +224,8 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 12. `0012_justificaciones_y_bajas.sql` — bajas de inscripción (`inscripciones.activa/fecha_baja/motivo_baja`), tabla `justificaciones` con RLS y triggers, `asistencia.justificacion_id`; redefine `resumen_asistencia_por_alumno` (agrega `activa`, `fecha_baja`) y `alumnos_en_riesgo` (sin bajas). **Va después de 0008 y 0011.** Sin ella la app funciona igual: justificaciones y bajas muestran un aviso y todo lo demás cae a la consulta sin las columnas nuevas.
 
 13. `0013_portal_familias.sql` — rol `tutor`, `tutores_alumnos`, `codigos_vinculacion`, RPCs `generar_codigo_vinculacion`, `vincular_tutor` y `tutores_de_alumno`, cláusulas de lectura del tutor en las políticas, sincronización del teléfono del tutor principal con `alumnos.telefono_padre`; además endurece `handle_new_user` (sin alta de admin, docentes pendientes de aprobación), hace efectivo `perfiles.activo` y protege columnas de `alumnos`. **Va después de 0012.**
+14. `0014_solicitudes_justificacion.sql` — tabla `solicitudes_justificacion`, RPC `resolver_solicitud`, bucket privado `certificados` con sus políticas en `storage.objects`. **Va después de 0013.**
+
 1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 
 `horarios.dia_semana`: la restricción original acepta `'Miercoles'` sin tilde (es lo que insertaron las importaciones). La UI de administración guarda los días con esa grafía (`DIAS_SEMANA` en `src/lib/api/admin.js`) y los muestra con tilde; para comparar días se usa siempre `indiceDia()` de `src/lib/dias.js`, que ignora tildes.

@@ -9,6 +9,7 @@ import {
   mesesAnteriores,
   rangoDeMeses,
   fechaLocalDeTimestamp,
+  sumarDias,
 } from './fecha'
 
 afterEach(() => vi.useRealTimers())
@@ -62,5 +63,10 @@ describe('meses', () => {
   it('fechaLocalDeTimestamp usa la zona del navegador', () => {
     const local = new Date(2026, 10, 15, 23, 30)
     expect(fechaLocalDeTimestamp(local.toISOString())).toBe('2026-11-15')
+  })
+
+  it('sumarDias cruza meses y años', () => {
+    expect(sumarDias('2026-12-30', 3)).toBe('2027-01-02')
+    expect(sumarDias('2026-03-01', -1)).toBe('2026-02-28')
   })
 })

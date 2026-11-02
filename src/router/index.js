@@ -102,6 +102,12 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: 'admin' },
     },
     {
+      path: '/solicitudes',
+      name: 'solicitudes-familias',
+      component: () => import('@/views/SolicitudesFamilias.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
       path: '/familia',
       name: 'familia',
       component: () => import('@/views/familia/FamiliaInicio.vue'),

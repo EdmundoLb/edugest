@@ -23,6 +23,13 @@ export function parseFechaLocal(fechaStr) {
   return new Date(y, m - 1, dia)
 }
 
+// "YYYY-MM-DD" + n días (n puede ser negativo), sin pasar por UTC.
+export function sumarDias(fechaStr, n) {
+  const d = parseFechaLocal(fechaStr)
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function formatearFecha(fechaStr, opciones) {
   return parseFechaLocal(fechaStr).toLocaleDateString('es-ES', opciones)
 }
