@@ -1,32 +1,84 @@
 <script setup>
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppNavbar from '@/components/AppNavbar.vue'
 import FooterSite from '@/components/FooterSite.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AppSidebar from '@/components/shell/AppSidebar.vue'
+import AppTopbar from '@/components/shell/AppTopbar.vue'
+import AppBottomBar from '@/components/shell/AppBottomBar.vue'
+import CommandPalette from '@/components/shell/CommandPalette.vue'
 import { useAuth } from '@/stores/auth'
+import { useEfectosSesion } from '@/composables/useEfectosSesion'
 
 const CHEQUEO_EXPIRACION_MS = 5 * 60 * 1000 // 5 minutos
+const CLAVE_SIDEBAR = 'edugest:sidebar-colapsada'
 
 const route = useRoute()
 const router = useRouter()
-const { state: authState, verificarExpiracion } = useAuth()
+const { state: authState, verificarExpiracion, logout } = useAuth()
+
+// Campanita, contadores y listas offline: funcionan en cualquier pantalla.
+useEfectosSesion()
 
 let intervaloExpiracion = null
 
-// Login, registro y restablecer contraseña son pantallas completas sin
-// navbar ni footer.
+// Login, registro y restablecer contraseña son pantallas completas, sin
+// barras.
 const pantallaCompleta = computed(() =>
   ['/login', '/Registro', '/reset-password'].includes(route.path),
 )
 
+// Las pantallas internas usan el shell (barra lateral en computadora, barra
+// inferior en celular); las públicas, el encabezado simple.
+const conShell = computed(
+  () =>
+    !pantallaCompleta.value &&
+    Boolean(authState.session && authState.perfil) &&
+    Boolean(route.meta.requiresAuth),
+)
+
+function leerColapsada() {
+  try {
+    return localStorage.getItem(CLAVE_SIDEBAR) === '1'
+  } catch {
+    return false
+  }
+}
+
+const sidebarColapsada = ref(leerColapsada())
+watch(sidebarColapsada, (v) => {
+  try {
+    localStorage.setItem(CLAVE_SIDEBAR, v ? '1' : '0')
+  } catch {
+    // Sin almacenamiento: se recuerda solo en esta pestaña.
+  }
+})
+
+const paletaAbierta = ref(false)
+
+function atajoPaleta(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && conShell.value) {
+    e.preventDefault()
+    paletaAbierta.value = !paletaAbierta.value
+  }
+}
+
+async function salir() {
+  paletaAbierta.value = false
+  await logout()
+  router.push('/')
+}
+
 onMounted(() => {
   intervaloExpiracion = setInterval(verificarExpiracion, CHEQUEO_EXPIRACION_MS)
+  window.addEventListener('keydown', atajoPaleta)
 })
 
 onUnmounted(() => {
   if (intervaloExpiracion) clearInterval(intervaloExpiracion)
+  window.removeEventListener('keydown', atajoPaleta)
 })
 
 watch(
@@ -41,11 +93,35 @@ watch(
 
 <template>
   <a href="#contenido" class="saltar-contenido">Saltar al contenido</a>
-  <AppNavbar v-if="!pantallaCompleta" />
-  <main id="contenido" class="app-main" :class="{ 'con-navbar': !pantallaCompleta }">
-    <RouterView />
-  </main>
-  <FooterSite v-if="!pantallaCompleta" class="no-print" />
+
+  <div v-if="conShell" :class="['shell', { 'shell--colapsada': sidebarColapsada }]">
+    <AppSidebar
+      v-model:colapsada="sidebarColapsada"
+      class="shell-sidebar no-print"
+      @salir="salir"
+    />
+    <div class="shell-columna">
+      <AppTopbar @buscar="paletaAbierta = true" />
+      <main id="contenido" class="shell-main">
+        <!-- Animación de entrada en cada cambio de pantalla (un div con key en
+             vez de <Transition>, que falla con vistas de varias raíces). -->
+        <div :key="route.path" class="shell-vista">
+          <RouterView />
+        </div>
+      </main>
+    </div>
+    <AppBottomBar class="shell-bottombar" @salir="salir" />
+    <CommandPalette v-model="paletaAbierta" @salir="salir" />
+  </div>
+
+  <template v-else>
+    <AppNavbar v-if="!pantallaCompleta" />
+    <main id="contenido" class="app-main" :class="{ 'con-navbar': !pantallaCompleta }">
+      <RouterView />
+    </main>
+    <FooterSite v-if="!pantallaCompleta" class="no-print" />
+  </template>
+
   <ToastHost />
   <ConfirmDialog />
 </template>
@@ -57,6 +133,49 @@ watch(
 
 .app-main.con-navbar {
   padding-top: var(--navbar-height);
+}
+
+/* ---------- Shell de las pantallas internas ---------- */
+
+.shell {
+  /* Las vistas calculan su alto mínimo con --navbar-height. */
+  --navbar-height: var(--topbar-alto);
+  display: flex;
+  min-height: 100vh;
+}
+
+.shell-columna {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-main {
+  flex: 1;
+  padding-bottom: var(--sp-10);
+}
+
+.shell-bottombar {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  .shell-sidebar {
+    display: none !important;
+  }
+
+  .shell-bottombar {
+    display: grid !important;
+  }
+
+  .shell-main {
+    padding-bottom: calc(var(--bottombar-alto) + env(safe-area-inset-bottom) + var(--sp-6));
+  }
+}
+
+.shell-vista {
+  animation: aparecer var(--motion-slow) var(--ease-out) both;
 }
 
 .saltar-contenido {
@@ -77,6 +196,10 @@ watch(
 @media print {
   .app-main.con-navbar {
     padding-top: 0;
+  }
+
+  .shell-main {
+    padding-bottom: 0;
   }
 }
 </style>

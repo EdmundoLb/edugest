@@ -37,38 +37,37 @@ defineProps({
 
 <style scoped>
 .page-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  animation: aparecer var(--motion-slow) var(--ease-out) both;
 }
 
 .page-header-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.25rem 1.5rem;
+  padding: var(--sp-8) var(--sp-6) var(--sp-2);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--sp-4);
   flex-wrap: wrap;
 }
 
 .page-header-texto {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: var(--sp-3);
   min-width: 0;
 }
 
 h1 {
-  font-size: 1.375rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
 }
 
 .subtitulo {
-  margin-top: 0.125rem;
-  font-size: 0.875rem;
+  margin-top: var(--sp-1);
+  font-size: var(--fs-base);
   color: var(--text-muted);
 }
 
@@ -77,12 +76,16 @@ h1 {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   color: var(--text-muted);
-  transition: background 0.15s;
+  box-shadow: var(--elev-1);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .btn-volver:hover {
@@ -98,17 +101,23 @@ h1 {
 .page-header-acciones {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--sp-2);
   flex-wrap: wrap;
 }
 
 @media (max-width: 600px) {
   .page-header-inner {
-    padding: 1rem;
+    padding: var(--sp-5) var(--sp-4) var(--sp-1);
   }
 
   h1 {
-    font-size: 1.1875rem;
+    font-size: var(--fs-xl);
+  }
+}
+
+@media print {
+  .page-header-inner {
+    padding: 0 0 var(--sp-4);
   }
 }
 </style>
