@@ -140,6 +140,18 @@ avisos_enviados         -- 0016: registro de avisos a familias por WhatsApp
 suscripciones_push      -- 0016: dispositivos para push (los usa 0017)
   id, perfil_id, endpoint UNIQUE, p256dh, auth, user_agent, created_at
 
+seguimientos            -- 0018: bitácora interna de contactos con la familia
+  id, alumno_id, tipo ('llamada','whatsapp','entrevista','nota'), descripcion, compromiso,
+  proxima_revision date, autor_id, autor_nombre (trigger), created_at
+
+franjas_entrevista      -- 0018: horarios que publica un docente o admin
+  id, profesional_id (default auth.uid()), profesional_nombre (trigger), inicio timestamptz,
+  duracion_min (10–120), modalidad ('presencial','videollamada','telefono'), lugar,
+  reservada boolean (la mantiene un trigger), UNIQUE (profesional_id, inicio)
+
+reservas_entrevista     -- 0018: una por franja (franja_id UNIQUE)
+  id, franja_id, tutor_id, alumno_id, motivo, tutor_nombre, tutor_telefono, created_at
+
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
   horario_id    uuid FK -> horarios.id
@@ -223,6 +235,10 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **notificaciones** (0016): SELECT/DELETE solo las propias. Sin INSERT por la API: las crean los triggers `trg_notificar_falta` (asistencia → familias con `recibe_avisos`; si la falta se corrige, se borra la no leída), `trg_notificar_solicitud` (aviso nuevo → docentes del curso o admins; resuelto → la familia) y `trg_notificar_comunicado`. Se marcan leídas con `marcar_notificaciones_leidas(ids)`. Publicada en `supabase_realtime`.
 - **avisos_enviados** (0016): SELECT/INSERT admin o docente del alumno. **suscripciones_push**: todo solo sobre las propias. La familia cambia `tutores_alumnos.recibe_avisos` con `configurar_avisos(vinculo, recibe)`.
 - **Push y email** (0017, opcional, ver `docs/NOTIFICACIONES.md`): `pg_net` + `pg_cron`; `_llamar_edge_function()` lee la URL y el secreto de Vault (`edugest_functions_url`, `edugest_webhook_secret`); `resumen_semanal_familias()` solo para `service_role`.
+- **seguimientos** (0018): SELECT/INSERT admin o docente del alumno (`autor_id = auth.uid()`); DELETE autor o admin. La familia no la ve.
+- **franjas_entrevista** (0018): SELECT el propio profesional / admin / familia de un alumno de ese docente o cualquier familia si es de un admin (`tutor_ve_profesional`). INSERT docente o admin, a futuro. DELETE propio o admin (avisa a la familia si estaba reservada).
+- **reservas_entrevista** (0018): SELECT la familia que reservó / el profesional (`es_profesional_de_franja`) / admin. Sin escritura por la API: `reservar_entrevista(franja, alumno, motivo)` y `cancelar_entrevista(reserva)`, que notifican a la otra parte.
+- **Alertas tempranas** (0018): `revisar_alertas_tempranas()` corre todos los días a las 11:00 UTC con `pg_cron` (job `edugest-alertas-tempranas`): 3+ faltas seguidas → familia; 5+ sin seguimiento en 7 días → docentes del curso y admins; revisión pactada para hoy → autor; entrevistas de mañana → ambas partes. Se puede correr a mano: `select public.revisar_alertas_tempranas();`. La zona horaria de los textos sale de `zona_horaria_institucion()`.
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -258,6 +274,7 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 15. `0015_comunicados.sql` — tablas `comunicados` y `comunicados_destinatarios`, triggers de firma y destinatarios, RPCs de lectura/respuesta y de seguimiento. **Va después de 0013.**
 16. `0016_notificaciones.sql` — notificaciones en la app (triggers + Realtime), preferencia de avisos, `avisos_enviados`, `suscripciones_push`. **Va después de 0015.**
 17. `0017_push_y_email.sql` — push y resumen semanal por email. **Correrla solo después de seguir `docs/NOTIFICACIONES.md`.**
+18. `0018_seguimiento_y_entrevistas.sql` — bitácora de seguimiento, agenda de entrevistas, alertas tempranas diarias (`pg_cron`) y `patrones_ausentismo`. **Va después de 0016.** Se puede aplicar sin 0017.
 
 1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 

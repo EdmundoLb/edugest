@@ -120,6 +120,18 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: ['docente', 'admin'] },
     },
     {
+      path: '/entrevistas',
+      name: 'entrevistas',
+      component: () => import('@/views/entrevistas/EntrevistasAgenda.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
+      path: '/familia/entrevistas',
+      name: 'familia-entrevistas',
+      component: () => import('@/views/familia/FamiliaEntrevistas.vue'),
+      meta: { requiresAuth: true, rol: 'tutor' },
+    },
+    {
       path: '/familia/comunicados',
       name: 'familia-comunicados',
       component: () => import('@/views/familia/FamiliaComunicados.vue'),

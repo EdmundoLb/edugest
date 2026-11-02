@@ -15,6 +15,8 @@ import {
 import { linkWhatsapp, armarMensajeAlerta } from '@/lib/whatsapp'
 import { registrarAvisoEnviado, ultimosAvisos } from '@/lib/api/notificaciones'
 import { tiempoRelativo } from '@/lib/notificaciones'
+import { ultimosSeguimientos } from '@/lib/api/seguimiento'
+import { estadoContacto } from '@/lib/seguimiento'
 
 const props = defineProps({
   // El admin manda los avisos a las familias; el docente solo ve la lista.
@@ -28,6 +30,8 @@ const faltaMigracion = ref(false)
 const error = ref(false)
 const verTodos = ref(false)
 const avisados = ref(new Map()) // alumnoId -> último aviso por WhatsApp (0016)
+const seguimientos = ref(new Map()) // alumnoId -> último seguimiento (0018)
+const hoy = hoyLocal()
 
 const visibles = computed(() => (verTodos.value ? filas.value : filas.value.slice(0, props.limite)))
 
@@ -41,6 +45,7 @@ onMounted(async () => {
   try {
     filas.value = await alumnosEnRiesgo({ desde: hace30Dias(), hasta: hoyLocal() })
     if (props.conAvisos) cargarAvisados()
+    cargarSeguimientos()
   } catch (e) {
     if (esFuncionFaltante(e)) faltaMigracion.value = true
     else {
@@ -51,6 +56,18 @@ onMounted(async () => {
     cargando.value = false
   }
 })
+
+async function cargarSeguimientos() {
+  try {
+    seguimientos.value = await ultimosSeguimientos([
+      ...new Set(filas.value.map((f) => f.alumno_id)),
+    ])
+  } catch (e) {
+    // Sin 0018 no hay bitácora: no se muestra el estado del contacto.
+    console.error(e)
+    seguimientos.value = null
+  }
+}
 
 async function cargarAvisados() {
   try {
@@ -116,6 +133,13 @@ function linkAviso(f) {
               {{ f.apellido }}, {{ f.nombre }}
             </router-link>
             <span class="curso">{{ f.curso_nombre }}</span>
+            <router-link
+              v-if="seguimientos"
+              :to="`/Estudiantes/${f.alumno_id}#seguimiento`"
+              :class="['contacto', estadoContacto(seguimientos.get(f.alumno_id), hoy).nivel]"
+            >
+              {{ estadoContacto(seguimientos.get(f.alumno_id), hoy).texto }}
+            </router-link>
             <span class="motivos">
               <span v-for="m in motivosRiesgo(f)" :key="m" class="motivo">{{ m }}</span>
               <span v-if="f.ultima_falta" class="texto-muted">
@@ -155,6 +179,30 @@ function linkAviso(f) {
 </template>
 
 <style scoped>
+.contacto {
+  align-self: flex-start;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.contacto.sin-contacto {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.contacto.revisar {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.contacto.contactado {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
 .avisado {
   font-size: 0.75rem;
   color: var(--success-text);

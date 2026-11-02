@@ -9,6 +9,7 @@ import AppSpinner from '@/components/AppSpinner.vue'
 import HistorialAlumno from '@/components/HistorialAlumno.vue'
 import JustificacionesPanel from '@/components/JustificacionesPanel.vue'
 import FamiliaAlumnoPanel from '@/components/FamiliaAlumnoPanel.vue'
+import BitacoraSeguimiento from '@/components/BitacoraSeguimiento.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { inscripcionesDeAlumno } from '@/lib/api/historial'
 import { darDeBaja, reactivarInscripcion } from '@/lib/api/admin'
@@ -381,6 +382,8 @@ const currentState = computed(() => {
               :alumno="estudiante"
               @cambio="recargarTelefonoPadre"
             />
+
+            <BitacoraSeguimiento class="ancho-completo" :alumno-id="estudiante.id" />
 
             <HistorialAlumno
               ref="historial"

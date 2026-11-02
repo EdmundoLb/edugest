@@ -27,6 +27,7 @@ const LINKS_POR_ROL = {
     { to: '/Reportes/mensual', texto: 'Reportes' },
     { to: '/solicitudes', texto: 'Familias' },
     { to: '/comunicados', texto: 'Comunicados' },
+    { to: '/entrevistas', texto: 'Entrevistas' },
   ],
   admin: [
     { to: '/admin', texto: 'Panel' },
@@ -36,10 +37,12 @@ const LINKS_POR_ROL = {
     { to: '/InformesAsistencia', texto: 'Informes' },
     { to: '/solicitudes', texto: 'Familias' },
     { to: '/comunicados', texto: 'Comunicados' },
+    { to: '/entrevistas', texto: 'Entrevistas' },
   ],
   tutor: [
     { to: '/familia', texto: 'Mis hijos' },
     { to: '/familia/comunicados', texto: 'Comunicados', contador: true },
+    { to: '/familia/entrevistas', texto: 'Entrevistas' },
     { to: '/familia/vincular', texto: 'Vincular alumno' },
   ],
 }
@@ -525,7 +528,7 @@ async function handleLogout() {
   display: none;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1240px) {
   .nav-links-desktop,
   .user-datos {
     display: none;

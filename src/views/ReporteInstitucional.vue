@@ -14,6 +14,8 @@ import { alumnosEnRiesgo, UMBRAL_PORCENTAJE } from '@/lib/api/alertas'
 import { resumirFilasPorCursoYMes } from '@/lib/historial'
 import { hoyLocal, mesesAnteriores, rangoDeMeses, rangoDelMes, nombreDelMes } from '@/lib/fecha'
 import { descargarCsv, nombreArchivo } from '@/lib/exportar'
+import { patronesAusentismo } from '@/lib/api/seguimiento'
+import { DIAS_ISO } from '@/lib/seguimiento'
 
 const MESES_TENDENCIA = 6
 
@@ -32,6 +34,7 @@ const sinAlertas = ref(false)
 const cursos = ref([]) // todos los visibles, para detectar los que no registraron nada
 const resumen = ref({ cursos: [], institucion: {} })
 const riesgo = ref([])
+const patrones = ref([]) // faltas concentradas en un día de la semana (0018)
 
 const meses = computed(() => mesesAnteriores(mes.value, MESES_TENDENCIA))
 const mesAnterior = computed(() => meses.value[MESES_TENDENCIA - 2])
@@ -122,6 +125,13 @@ async function cargar() {
     ])
     resumen.value = resumirFilasPorCursoYMes(filasPorFecha)
     riesgo.value = alertas
+    patrones.value = await patronesAusentismo(rangoDeMeses(meses.value[0], mes.value)).catch(
+      (e) => {
+        // Sin 0018 el reporte sigue igual, sin la sección de patrones.
+        if (!esFuncionFaltante(e)) console.error(e)
+        return []
+      },
+    )
   } catch (e) {
     resumen.value = { cursos: [], institucion: {} }
     riesgo.value = []
@@ -345,6 +355,27 @@ function imprimir() {
           </p>
         </section>
 
+        <section v-if="patrones.length" class="tarjeta bloque">
+          <h2>Faltas que se repiten el mismo día</h2>
+          <p class="texto-muted ayuda-patrones">
+            Alumnos que en los últimos {{ MESES_TENDENCIA }} meses concentran la mayoría de sus
+            faltas en un día de la semana. Suele indicar una causa puntual (transporte, otra
+            actividad, una materia) que conviene hablar con la familia.
+          </p>
+          <ul class="patrones">
+            <li v-for="p in patrones" :key="`${p.alumno_id}|${p.curso_id}|${p.dia_semana}`">
+              <router-link :to="`/Estudiantes/${p.alumno_id}#seguimiento`">
+                {{ p.apellido }}, {{ p.nombre }}
+              </router-link>
+              <span class="texto-muted"> · {{ p.curso_nombre }}</span>
+              <span class="patron">
+                {{ p.faltas_ese_dia }} de {{ p.faltas_total }} faltas fueron un
+                <strong>{{ DIAS_ISO[p.dia_semana] }}</strong>
+              </span>
+            </li>
+          </ul>
+        </section>
+
         <section v-if="resumen.cursos.length" class="tarjeta bloque">
           <h2>Tendencia de los últimos {{ MESES_TENDENCIA }} meses</h2>
           <div class="tabla-scroll">
@@ -398,6 +429,29 @@ function imprimir() {
 <style scoped>
 .reporte-page {
   min-height: calc(100vh - var(--navbar-height));
+}
+
+.ayuda-patrones {
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.patrones {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.patrones a {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.patron {
+  display: block;
+  color: var(--text-2);
 }
 
 .filtros {
