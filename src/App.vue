@@ -110,7 +110,7 @@ watch(
         </div>
       </main>
     </div>
-    <AppBottomBar class="shell-bottombar" @salir="salir" />
+    <AppBottomBar @salir="salir" />
     <CommandPalette v-model="paletaAbierta" @salir="salir" />
   </div>
 
@@ -156,17 +156,9 @@ watch(
   padding-bottom: var(--sp-10);
 }
 
-.shell-bottombar {
-  display: none !important;
-}
-
 @media (max-width: 1023px) {
   .shell-sidebar {
     display: none !important;
-  }
-
-  .shell-bottombar {
-    display: grid !important;
   }
 
   .shell-main {

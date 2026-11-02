@@ -107,11 +107,22 @@ watch(
 </template>
 
 <style scoped>
+/* Solo en celular/tablet. El componente tiene dos raíces (barra + panel
+   "Más"), así que la visibilidad se decide acá y no con una clase desde afuera. */
+.barra-inferior {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .barra-inferior {
+    display: grid;
+  }
+}
+
 .barra-inferior {
   position: fixed;
   inset: auto 0 0;
   z-index: 90;
-  display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   height: calc(var(--bottombar-alto) + env(safe-area-inset-bottom));
