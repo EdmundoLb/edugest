@@ -66,12 +66,7 @@ const MENU = {
       items: [
         { to: '/admin/cursos', texto: 'Cursos', icono: 'cursos' },
         { to: '/Estudiantes', texto: 'Alumnos', icono: 'alumnos' },
-        {
-          to: '/InformesAsistencia',
-          texto: 'Informes de asistencia',
-          corto: 'Informes',
-          icono: 'documento',
-        },
+        { to: '/InformesAsistencia', texto: 'Informes', icono: 'documento' },
       ],
     },
     FAMILIAS_PERSONAL,
