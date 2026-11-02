@@ -5,7 +5,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { useTema } from '@/composables/useTema'
-import { entradasPorRol, filtrarComandos } from '@/lib/navegacion'
+import { entradasPorRol, filtrarComandos, puntajeCoincidencia } from '@/lib/navegacion'
 import { buscarAlumnos } from '@/lib/api/admin'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
@@ -59,7 +59,15 @@ const resultados = computed(() => {
     icono: a.icono,
     id: a.id,
   }))
-  return [...pantallas, ...deAlumnos, ...deAcciones]
+  // Las pantallas que coinciden solo por letras salteadas (ej. "ana" en
+  // "Calendario") van después de los alumnos encontrados.
+  const fuerte = (r) => puntajeCoincidencia(r.texto, consulta.value) > 1
+  return [
+    ...pantallas.filter(fuerte),
+    ...deAlumnos,
+    ...pantallas.filter((r) => !fuerte(r)),
+    ...deAcciones,
+  ]
 })
 
 watch(abierta, async (v) => {
