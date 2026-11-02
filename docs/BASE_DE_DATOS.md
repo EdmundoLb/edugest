@@ -115,6 +115,21 @@ solicitudes_justificacion  -- 0014: aviso de ausencia / pedido de justificación
   created_at, revisada_por, revisada_at
   justificacion_id uuid  -- la justificación que creó al aprobarse (sin FK)
 
+comunicados             -- 0015: cuaderno de comunicaciones
+  id, titulo (3–150), cuerpo (≤5000)
+  tipo          text CHECK IN ('aviso','autorizacion','encuesta','citacion')
+  audiencia     text: 'institucion' | 'curso' (curso_id) | 'alumno' (alumno_id)
+  opciones      jsonb  -- null para aviso; array de 2 a 6 textos para el resto
+  fecha_limite  date   -- para responder (opcional)
+  autor_id      uuid FK -> perfiles.id default auth.uid()
+  autor_nombre  text   -- firma ('Administración' o nombre del docente), la pone un trigger
+  created_at
+
+comunicados_destinatarios  -- 0015: una fila por tutor × hijo destinatario
+  id, comunicado_id (ON DELETE CASCADE), tutor_id, alumno_id
+  leido_at, respuesta, respondido_at   -- acuse de lectura y "firma"
+  UNIQUE (comunicado_id, tutor_id, alumno_id)
+
 informes_asistencia     -- agregada en migración 0005
   id            uuid PK
   horario_id    uuid FK -> horarios.id
@@ -193,6 +208,8 @@ Resumen de políticas por tabla (todas restringidas a `authenticated`, no `publi
 - **alumnos, columnas protegidas** (0013): el trigger `trg_proteger_columnas_alumno` revierte cambios a `perfil_id`, `ci`, `nombre`, `apellido`, `telefono_padre` e `historial_academico` cuando el UPDATE viene de la API (`current_user = 'authenticated'`) y no es admin. Las funciones `SECURITY DEFINER` y el SQL Editor sí pueden.
 - **solicitudes_justificacion** (0014): SELECT admin / `tutor_de_alumno` / `docente_tiene_alumno`. INSERT solo el tutor del alumno, en estado `pendiente`, con curso en el que esté inscripto (`inscripcion_activa`) o null, y adjunto dentro de la carpeta del alumno. UPDATE solo para cancelar una pendiente propia (el trigger `trg_solicitud_solo_cancelar` rechaza cambios a otras columnas). Se aprueba/rechaza con la RPC `resolver_solicitud(id, aprobar, respuesta)` (`SECURITY DEFINER`): admin, o docente que dicta ese curso; al aprobar inserta en `justificaciones` y los triggers de 0012 hacen el resto.
 - **storage.objects, bucket `certificados`** (0014, privado, 5 MB, PDF/JPG/PNG/WEBP): INSERT el tutor del alumno de la carpeta (`alumno_de_ruta(name)`); SELECT admin / tutor / docente del alumno. Se leen con URLs firmadas de 5 minutos.
+- **comunicados** (0015): SELECT admin / autor / destinatario (`es_destinatario_comunicado`). INSERT con `autor_id = auth.uid()` y admin, o docente con `audiencia = 'curso'` de un curso que dicta o `'alumno'` de un alumno suyo. DELETE admin o autor. Sin UPDATE. Triggers: `trg_comunicado_firmar` (firma), `trg_comunicado_destinatarios` (calcula destinatarios con `tutores_alumnos` + inscripciones activas) y, en `tutores_alumnos`, `trg_comunicados_para_tutor_nuevo` (le agrega lo de los últimos 30 días no vencido).
+- **comunicados_destinatarios** (0015): SELECT el propio tutor / admin / autor (`es_autor_comunicado`). Sin INSERT/UPDATE/DELETE por la API: la familia usa `marcar_comunicado_leido(comunicado_id)` y `responder_comunicado(destinatario_id, respuesta)` (valida que la respuesta esté en `opciones` y que no haya vencido `fecha_limite`). Quien publica usa `comunicados_enviados()` y `destinatarios_de_comunicado(id)` (nombres y teléfonos de las familias, para recordatorios).
 - **informes_asistencia**: SELECT/UPDATE admin o el docente dueño del horario (`horario_id`, vía subquery directo a `horarios` — no hace falta una función `SECURITY DEFINER` nueva porque es una tabla hoja, ninguna policy de `horarios` la consulta a ella, así que no hay riesgo de recursión). INSERT: docente dueño del horario (con `profesor_id` propio) o admin. DELETE: solo admin.
 
 ## Cómo promover un usuario a `admin`
@@ -225,6 +242,7 @@ alter table public.perfiles enable trigger trg_prevent_self_privilege_escalation
 
 13. `0013_portal_familias.sql` — rol `tutor`, `tutores_alumnos`, `codigos_vinculacion`, RPCs `generar_codigo_vinculacion`, `vincular_tutor` y `tutores_de_alumno`, cláusulas de lectura del tutor en las políticas, sincronización del teléfono del tutor principal con `alumnos.telefono_padre`; además endurece `handle_new_user` (sin alta de admin, docentes pendientes de aprobación), hace efectivo `perfiles.activo` y protege columnas de `alumnos`. **Va después de 0012.**
 14. `0014_solicitudes_justificacion.sql` — tabla `solicitudes_justificacion`, RPC `resolver_solicitud`, bucket privado `certificados` con sus políticas en `storage.objects`. **Va después de 0013.**
+15. `0015_comunicados.sql` — tablas `comunicados` y `comunicados_destinatarios`, triggers de firma y destinatarios, RPCs de lectura/respuesta y de seguimiento. **Va después de 0013.**
 
 1, 2 y 3 ya están aplicadas en el proyecto de Supabase de este equipo (confirmado en la auditoría de 2026-08 y en la verificación de la importación). 4 a 12 son posteriores — verificar en la base cuáles ya se pegaron en el SQL Editor (por ejemplo `select proname from pg_proc where proname in ('resumen_asistencia_por_fecha','admin_crear_alumno','alumnos_en_riesgo');`). Si conectás este repo a un proyecto de Supabase nuevo (otro ambiente, staging, etc.), corré todas en orden antes de usar la app.
 

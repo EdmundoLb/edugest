@@ -4,6 +4,7 @@ import {
   linkWhatsapp,
   armarMensajeAlerta,
   armarMensajeCodigoVinculacion,
+  armarMensajeRecordatorioComunicado,
 } from './whatsapp'
 
 describe('whatsapp', () => {
@@ -42,5 +43,15 @@ describe('whatsapp', () => {
     expect(m).toContain('https://edugest.app/Registro?codigo=ABCDEF23')
     expect(m).toContain('*ABCD-EF23*')
     expect(m).toContain('15 de noviembre')
+  })
+
+  it('armarMensajeRecordatorioComunicado distingue leer de responder', () => {
+    const base = { titulo: 'Salida al museo', alumnoNombre: 'Ana Pérez' }
+    expect(armarMensajeRecordatorioComunicado({ ...base, requiereRespuesta: true })).toContain(
+      'sin responder sobre Ana Pérez: *Salida al museo*',
+    )
+    expect(armarMensajeRecordatorioComunicado({ ...base, requiereRespuesta: false })).toContain(
+      'sin leer',
+    )
   })
 })

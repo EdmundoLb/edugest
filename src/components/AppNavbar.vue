@@ -3,11 +3,13 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 import { useTema } from '@/composables/useTema'
+import { useComunicadosNoLeidos } from '@/composables/useComunicadosNoLeidos'
 
 const route = useRoute()
 const router = useRouter()
 const { state, logout } = useAuth()
 const { tema, alternarTema } = useTema()
+const { noLeidos, refrescar: refrescarNoLeidos } = useComunicadosNoLeidos()
 
 const menuUsuarioAbierto = ref(false)
 const menuMovilAbierto = ref(false)
@@ -21,6 +23,7 @@ const LINKS_POR_ROL = {
     { to: '/Estudiantes', texto: 'Alumnos' },
     { to: '/Reportes/mensual', texto: 'Reportes' },
     { to: '/solicitudes', texto: 'Familias' },
+    { to: '/comunicados', texto: 'Comunicados' },
   ],
   admin: [
     { to: '/admin', texto: 'Panel' },
@@ -29,9 +32,11 @@ const LINKS_POR_ROL = {
     { to: '/Reportes/mensual', texto: 'Reportes' },
     { to: '/InformesAsistencia', texto: 'Informes' },
     { to: '/solicitudes', texto: 'Familias' },
+    { to: '/comunicados', texto: 'Comunicados' },
   ],
   tutor: [
     { to: '/familia', texto: 'Mis hijos' },
+    { to: '/familia/comunicados', texto: 'Comunicados', contador: true },
     { to: '/familia/vincular', texto: 'Vincular alumno' },
   ],
 }
@@ -69,6 +74,9 @@ const iniciales = computed(() =>
     .map((p) => p.charAt(0).toUpperCase())
     .join(''),
 )
+
+// Comunicados sin leer de la familia (badge en el link).
+watch(() => state.perfil?.id, refrescarNoLeidos, { immediate: true })
 
 watch(
   () => route.fullPath,
@@ -122,7 +130,8 @@ async function handleLogout() {
           :class="['nav-link', { activo: esActivo(link.to) }]"
           :aria-current="esActivo(link.to) ? 'page' : undefined"
         >
-          {{ link.texto }}
+          {{ link.texto
+          }}<span v-if="link.contador && noLeidos" class="contador-link">{{ noLeidos }}</span>
         </router-link>
       </div>
 
@@ -248,7 +257,8 @@ async function handleLogout() {
         :class="['nav-link', { activo: esActivo(link.to) }]"
         :aria-current="esActivo(link.to) ? 'page' : undefined"
       >
-        {{ link.texto }}
+        {{ link.texto
+        }}<span v-if="link.contador && noLeidos" class="contador-link">{{ noLeidos }}</span>
       </router-link>
     </div>
   </nav>
@@ -302,6 +312,20 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.contador-link {
+  display: inline-block;
+  min-width: 1.125rem;
+  margin-left: 0.375rem;
+  padding: 0 0.3125rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--on-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.125rem;
+  text-align: center;
 }
 
 .nav-link {

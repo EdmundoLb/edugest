@@ -79,6 +79,15 @@ export function armarMensajeCodigoVinculacion({ alumno, codigo, vence, link }) {
   )
 }
 
+// Recordatorio a una familia que todavía no leyó o no respondió un comunicado.
+export function armarMensajeRecordatorioComunicado({ titulo, alumnoNombre, requiereRespuesta }) {
+  return (
+    `Hola, le recordamos que tiene un comunicado de EduGest sin ` +
+    `${requiereRespuesta ? 'responder' : 'leer'} sobre ${alumnoNombre}: *${titulo}*.\n` +
+    `Puede verlo ingresando al portal de familias.\n\n— EduGest`
+  )
+}
+
 export function armarMensajeAlerta({ alumno, curso, porcentaje, faltasSeguidas }) {
   let mensaje =
     `Hola, nos comunicamos de EduGest por la asistencia de ` +

@@ -7,6 +7,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import AppSpinner from '@/components/AppSpinner.vue'
 import { useAuth } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { useComunicadosNoLeidos } from '@/composables/useComunicadosNoLeidos'
 import { listarHijos, actualizarTelefono, esEsquemaFaltante } from '@/lib/api/familias'
 import { asistenciaDeAlumno } from '@/lib/api/historial'
 import { UMBRAL_PORCENTAJE, FALTAS_SEGUIDAS } from '@/lib/api/alertas'
@@ -16,6 +17,7 @@ import { hoyLocal, rangoDelMes, nombreDelMes, formatearFecha } from '@/lib/fecha
 
 const { state } = useAuth()
 const toast = useToast()
+const { noLeidos } = useComunicadosNoLeidos()
 
 const ESTADOS = { presente: 'Presente', ausente: 'Ausente', justificado: 'Justificado' }
 
@@ -93,6 +95,13 @@ async function guardarTelefono() {
           por clase.
         </p>
       </div>
+
+      <router-link v-if="noLeidos" to="/familia/comunicados" class="tarjeta aviso-comunicados">
+        <strong>{{
+          noLeidos === 1 ? 'Tenés un comunicado sin leer' : `Tenés ${noLeidos} comunicados sin leer`
+        }}</strong>
+        <span>Ver comunicados →</span>
+      </router-link>
 
       <div v-if="cargando" class="cargando">
         <AppSpinner size="medium" />
@@ -224,6 +233,29 @@ async function guardarTelefono() {
 
 .bienvenida p,
 .chico {
+  font-size: 0.875rem;
+}
+
+.aviso-comunicados {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  padding: 0.875rem 1.25rem;
+  border-left: 4px solid var(--primary);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.aviso-comunicados:hover {
+  background: var(--surface-hover);
+}
+
+.aviso-comunicados span {
+  color: var(--primary-text);
+  font-weight: 600;
   font-size: 0.875rem;
 }
 

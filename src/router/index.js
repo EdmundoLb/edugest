@@ -102,6 +102,30 @@ const router = createRouter({
       meta: { requiresAuth: true, rol: 'admin' },
     },
     {
+      path: '/comunicados',
+      name: 'comunicados',
+      component: () => import('@/views/comunicados/ComunicadosEnviados.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
+      path: '/comunicados/nuevo',
+      name: 'comunicado-nuevo',
+      component: () => import('@/views/comunicados/ComunicadoNuevo.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
+      path: '/comunicados/:id',
+      name: 'comunicado-detalle',
+      component: () => import('@/views/comunicados/ComunicadoDetalle.vue'),
+      meta: { requiresAuth: true, rol: ['docente', 'admin'] },
+    },
+    {
+      path: '/familia/comunicados',
+      name: 'familia-comunicados',
+      component: () => import('@/views/familia/FamiliaComunicados.vue'),
+      meta: { requiresAuth: true, rol: 'tutor' },
+    },
+    {
       path: '/solicitudes',
       name: 'solicitudes-familias',
       component: () => import('@/views/SolicitudesFamilias.vue'),
