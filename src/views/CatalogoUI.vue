@@ -19,6 +19,8 @@ import AppBarChart from '@/components/ui/AppBarChart.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import AlumnoAsistenciaFila from '@/components/AlumnoAsistenciaFila.vue'
+import ListaUnoPorUno from '@/components/ListaUnoPorUno.vue'
 import { tendencia } from '@/lib/ui'
 
 const { tema, alternarTema } = useTema()
@@ -26,6 +28,14 @@ const { tema, alternarTema } = useTema()
 const estado = ref('presente')
 const pestana = ref('pendientes')
 const sheet = ref(false)
+const alumnosDemo = [
+  { id: 'demo-1', nombre: 'Ana', apellido: 'Benítez' },
+  { id: 'demo-2', nombre: 'Lucas', apellido: 'Giménez' },
+  { id: 'demo-3', nombre: 'Sofía', apellido: 'Ramírez' },
+]
+const asistenciaDemo = ref({ 'demo-1': 'presente', 'demo-2': 'ausente', 'demo-3': 'tarde' })
+const observacionesDemo = ref({ 'demo-1': '', 'demo-2': '', 'demo-3': 'Llegó 08:20' })
+const avisosDemo = new Map([['demo-2', 'Turno médico']])
 const serie = [82, 85, 80, 88, 91, 87, 93, 90, 94]
 
 const ESTADOS = [
@@ -220,6 +230,27 @@ const ICONOS = [
     </section>
 
     <section>
+      <h2>Llamar lista</h2>
+      <div class="demo-lista">
+        <AlumnoAsistenciaFila
+          v-for="a in alumnosDemo"
+          :key="a.id"
+          v-model:estado="asistenciaDemo[a.id]"
+          v-model:observacion="observacionesDemo[a.id]"
+          :alumno="a"
+          :aviso="avisosDemo.get(a.id) ?? ''"
+        />
+      </div>
+      <ListaUnoPorUno
+        class="demo-uno"
+        :alumnos="alumnosDemo"
+        :asistencia="asistenciaDemo"
+        :avisos="avisosDemo"
+        @marcar="(id, e) => (asistenciaDemo[id] = e)"
+      />
+    </section>
+
+    <section>
       <h2>Estado vacío y panel</h2>
       <AppCard>
         <EmptyState
@@ -305,5 +336,16 @@ h2 {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-2);
+}
+.demo-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 760px;
+}
+
+.demo-uno {
+  max-width: 520px;
+  margin-top: var(--sp-6);
 }
 </style>

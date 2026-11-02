@@ -1,7 +1,14 @@
 <script setup>
-// Una fila de "Llamar lista": nombre del alumno, los tres estados posibles y
-// la observación. Los valores viven en el padre (v-model:estado / v-model:observacion).
-defineProps({
+// Una fila de "Llamar lista". Tocar al alumno alterna presente/ausente; el
+// control de la derecha da los cuatro estados, y el lápiz abre la observación.
+// Los valores viven en el padre (v-model:estado / v-model:observacion).
+import { ref, computed } from 'vue'
+import { ESTADOS_LISTA, TEXTO_ESTADO, alternarEstado, vibrar } from '@/lib/lista'
+import AppAvatar from '@/components/ui/AppAvatar.vue'
+import AppIcon from '@/components/ui/AppIcon.vue'
+import AppSegmented from '@/components/ui/AppSegmented.vue'
+
+const props = defineProps({
   alumno: { type: Object, required: true },
   deshabilitado: { type: Boolean, default: false },
   // Motivo de un aviso pendiente de la familia para esta fecha (0014).
@@ -11,196 +18,214 @@ defineProps({
 const estado = defineModel('estado', { type: String, default: 'presente' })
 const observacion = defineModel('observacion', { type: String, default: '' })
 
-const OPCIONES = [
-  { valor: 'presente', texto: 'Presente', corto: 'P' },
-  { valor: 'ausente', texto: 'Ausente', corto: 'A' },
-  { valor: 'tarde', texto: 'Tarde', corto: 'T' },
-  { valor: 'justificado', texto: 'Justificado', corto: 'J' },
-]
+const notaAbierta = ref(Boolean(observacion.value))
+const nombreCompleto = computed(() => `${props.alumno.nombre} ${props.alumno.apellido}`)
+
+function marcar(nuevo) {
+  if (props.deshabilitado || nuevo === estado.value) return
+  estado.value = nuevo
+  vibrar()
+}
 </script>
 
 <template>
-  <div :class="['fila', estado]">
-    <div class="alumno">
-      <span class="avatar" aria-hidden="true">{{ alumno.apellido?.charAt(0)?.toUpperCase() }}</span>
-      <span class="nombre">
-        <strong>{{ alumno.apellido }}</strong
-        >, {{ alumno.nombre }}
-        <span v-if="aviso" class="aviso-familia" :title="aviso"
-          >Aviso de la familia: {{ aviso }}</span
-        >
-      </span>
-    </div>
-
-    <div
-      class="opciones"
-      role="radiogroup"
-      :aria-label="`Asistencia de ${alumno.nombre} ${alumno.apellido}`"
+  <div :class="['fila-asistencia', `fila-asistencia--${estado}`]">
+    <button
+      type="button"
+      class="alumno"
+      :disabled="deshabilitado"
+      :aria-label="`${nombreCompleto}: ${TEXTO_ESTADO[estado]}. Tocá para marcar ${TEXTO_ESTADO[alternarEstado(estado)].toLowerCase()}.`"
+      @click="marcar(alternarEstado(estado))"
     >
-      <label
-        v-for="op in OPCIONES"
-        :key="op.valor"
-        :class="['opcion', op.valor, { activa: estado === op.valor }]"
-      >
-        <input
-          v-model="estado"
-          type="radio"
-          class="sr-only"
-          :name="`asistencia-${alumno.id}`"
-          :value="op.valor"
-          :disabled="deshabilitado"
-        />
-        <span class="texto-largo">{{ op.texto }}</span>
-        <span class="texto-corto" aria-hidden="true">{{ op.corto }}</span>
-      </label>
-    </div>
+      <span class="avatar">
+        <AppAvatar :nombre="nombreCompleto" :semilla="String(alumno.id)" />
+        <span class="avatar-estado" aria-hidden="true">
+          <AppIcon v-if="estado === 'ausente'" nombre="cerrar" :tamano="11" :grosor="3" />
+          <AppIcon v-else-if="estado === 'tarde'" nombre="reloj" :tamano="11" :grosor="3" />
+          <AppIcon v-else nombre="check" :tamano="11" :grosor="3" />
+        </span>
+      </span>
+      <span class="nombre">
+        <span class="nombre-texto"
+          ><strong>{{ alumno.apellido }}</strong
+          >, {{ alumno.nombre }}</span
+        >
+        <span v-if="aviso" class="aviso-familia" :title="aviso">
+          <AppIcon nombre="bandeja" :tamano="13" />
+          Aviso de la familia: {{ aviso }}
+        </span>
+      </span>
+    </button>
+
+    <AppSegmented
+      :model-value="estado"
+      :opciones="ESTADOS_LISTA"
+      :nombre="`asistencia-${alumno.id}`"
+      :etiqueta="`Asistencia de ${nombreCompleto}`"
+      :deshabilitado="deshabilitado"
+      compacto
+      @update:model-value="marcar"
+    />
+
+    <button
+      type="button"
+      :class="['nota', { 'nota--con-texto': observacion }]"
+      :aria-label="`Observación para ${nombreCompleto}`"
+      :aria-expanded="notaAbierta"
+      :title="observacion || 'Agregar observación'"
+      @click="notaAbierta = !notaAbierta"
+    >
+      <AppIcon nombre="editar" :tamano="17" />
+    </button>
 
     <input
+      v-if="notaAbierta"
       v-model="observacion"
       type="text"
       class="observacion"
       placeholder="Observación (opcional)"
-      :aria-label="`Observación para ${alumno.nombre} ${alumno.apellido}`"
+      :aria-label="`Observación para ${nombreCompleto}`"
       :disabled="deshabilitado"
     />
   </div>
 </template>
 
 <style scoped>
-.fila {
+.fila-asistencia {
+  --tono: var(--estado-presente);
+  --tono-suave: var(--estado-presente-suave);
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 0.75rem 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface);
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--success);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out);
 }
 
-.fila.ausente {
-  border-left-color: var(--danger);
+.fila-asistencia--ausente {
+  --tono: var(--estado-ausente);
+  --tono-suave: var(--estado-ausente-suave);
+  border-color: color-mix(in srgb, var(--estado-ausente) 35%, var(--border));
+  background: color-mix(in srgb, var(--estado-ausente-suave) 55%, var(--surface));
 }
 
-.fila.justificado {
-  border-left-color: var(--warning);
+.fila-asistencia--tarde {
+  --tono: var(--estado-tarde);
+  --tono-suave: var(--estado-tarde-suave);
 }
 
-.fila.tarde {
-  border-left-color: var(--primary);
+.fila-asistencia--justificado {
+  --tono: var(--estado-justificado);
+  --tono-suave: var(--estado-justificado-suave);
 }
 
 .alumno {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--sp-3);
   min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.alumno:active .avatar {
+  transform: scale(0.94);
 }
 
 .avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.avatar-estado {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--surface);
   border-radius: 50%;
-  background: var(--primary-soft);
-  color: var(--primary-text);
-  font-size: 0.8125rem;
-  font-weight: 700;
+  background: var(--tono);
+  color: var(--on-primary);
+  transition: background-color var(--motion-base) var(--ease-out);
 }
 
 .nombre {
-  font-size: 0.9375rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.nombre-texto {
+  font-size: var(--fs-base);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nombre strong {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .aviso-familia {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   margin-top: 0.125rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
   color: var(--warning-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.opciones {
-  display: flex;
-  gap: 0.375rem;
-}
-
-.opcion {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 40px;
-  padding: 0 0.875rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-muted);
+.nota {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-subtle);
   cursor: pointer;
-  user-select: none;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
 }
 
-.opcion:hover {
+.nota:hover {
   background: var(--surface-hover);
+  color: var(--text);
 }
 
-.opcion:focus-within {
-  box-shadow: var(--focus-ring);
-}
-
-.opcion.presente.activa {
-  background: var(--success-soft);
-  border-color: var(--success-border);
-  color: var(--success-text);
-}
-
-.opcion.ausente.activa {
-  background: var(--danger-soft);
-  border-color: var(--danger-border);
-  color: var(--danger-text);
-}
-
-.opcion.tarde.activa {
-  background: var(--primary-soft-strong);
-  border-color: var(--primary);
+.nota--con-texto {
   color: var(--primary-text);
-}
-
-.opcion.justificado.activa {
-  background: var(--warning-soft);
-  border-color: var(--warning-border);
-  color: var(--warning-text);
-}
-
-.texto-corto {
-  display: none;
+  background: var(--primary-soft);
 }
 
 .observacion {
+  grid-column: 1 / -1;
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
 }
 
 .observacion::placeholder {
@@ -213,28 +238,21 @@ const OPCIONES = [
   box-shadow: var(--focus-ring);
 }
 
-@media (max-width: 760px) {
-  .fila {
-    grid-template-columns: 1fr auto;
+@media (max-width: 560px) {
+  .fila-asistencia {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .observacion {
+  .fila-asistencia > :deep(.segmentado) {
     grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
   }
 
-  .texto-largo {
-    display: none;
-  }
-
-  .texto-corto {
-    display: inline;
-  }
-
-  .opcion {
-    min-width: 46px;
-    min-height: 44px;
-    padding: 0;
-    font-size: 0.9375rem;
+  .nota {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 </style>

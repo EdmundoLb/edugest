@@ -161,8 +161,14 @@ watch(
     display: none !important;
   }
 
+  /* Alto de la barra inferior fija: las barras sticky de las vistas
+     (ej. "Guardar" en Llamar lista) se apoyan arriba de ella. */
+  .shell {
+    --inferior-fijo: calc(var(--bottombar-alto) + env(safe-area-inset-bottom));
+  }
+
   .shell-main {
-    padding-bottom: calc(var(--bottombar-alto) + env(safe-area-inset-bottom) + var(--sp-6));
+    padding-bottom: calc(var(--inferior-fijo) + var(--sp-6));
   }
 }
 
